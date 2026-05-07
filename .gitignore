@@ -1,0 +1,14 @@
+# Environment variables (keep credentials off GitHub)
+.env
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Generated PDF reports
+*.pdf
+
+# Editor / OS junk
+.DS_Store
+Thumbs.db
