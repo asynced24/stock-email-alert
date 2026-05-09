@@ -46,12 +46,22 @@ def get_value_on_or_before(series, target_date):
     """
     Given a pandas Series with DatetimeIndex, return the most recent
     value on or before target_date. Returns None if not found.
+    Handles edge cases: non-DatetimeIndex (e.g. RangeIndex from fredapi),
+    tz-aware vs naive timestamps, and empty/None series.
     """
     try:
         import pandas as pd
         if series is None or series.empty:
             return None
+
+        # Some fredapi responses come back with RangeIndex instead of
+        # DatetimeIndex when the series has no parseable date metadata.
+        # In that case we can't do a time-based lookup.
+        if not isinstance(series.index, pd.DatetimeIndex):
+            return None
+
         target = pd.Timestamp(target_date).tz_localize(None)
+        # Strip timezone from index so naive comparison works
         idx = series.index.tz_localize(None) if series.index.tz else series.index
         mask = idx <= target
         filtered = series[mask].dropna()

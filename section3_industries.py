@@ -62,7 +62,7 @@ INDUSTRY_ETFS = [
     ("SLX",   "Steel (Sub-Industry)"),
     ("WOOD",  "Timber & Forestry (Sub-Industry)"),
     ("MOO",   "Agribusiness (Sub-Industry)"),
-    ("XAL",   "Airlines (Sub-Industry)"),
+    ("JETS",  "Airlines (Sub-Industry)"),
     ("ROBO",  "Robotics & AI (Sub-Industry)"),
     ("ARKK",  "Disruptive Innovation (Sub-Industry)"),
     ("FINX",  "FinTech (Sub-Industry)"),

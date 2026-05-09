@@ -15,13 +15,48 @@ YIELD_CURVE_META = ("Yield Curve (10Y Yield − 2Y Yield)", "Percentage Points (
 
 
 def _fetch_series(fred, series_id, start_date):
-    """Fetch a FRED series from start_date to today. Returns pandas Series or None."""
+    """
+    Fetch a FRED series from start_date to today. Returns pandas Series or None.
+    Handles cases where fredapi returns a RangeIndex instead of DatetimeIndex
+    by fetching the series info to reconstruct a proper time index.
+    """
+    import pandas as pd
+
+    def _as_datetime_series(data):
+        """Return data only if it has a proper DatetimeIndex, else None."""
+        if data is None:
+            return None
+        data = data.dropna()
+        if data.empty:
+            return None
+        if isinstance(data.index, pd.DatetimeIndex):
+            return data
+        # fredapi sometimes returns RangeIndex — try to recover via series info
+        try:
+            info = fred.get_series_info(series_id)
+            freq  = info.get("frequency_short", "D")
+            start = info.get("observation_start")
+            end   = info.get("observation_end")
+            if start and end:
+                idx = pd.date_range(start=start, end=end, freq=freq)
+                if len(idx) == len(data):
+                    data.index = idx
+                    return data.dropna()
+        except Exception:
+            pass
+        return None
+
     try:
         data = fred.get_series(
             series_id,
             observation_start=start_date.strftime("%Y-%m-%d"),
         )
-        return data.dropna() if data is not None else None
+        result = _as_datetime_series(data)
+        if result is not None:
+            return result
+        # If the bounded fetch returned a bad index, retry without start date
+        data = fred.get_series(series_id)
+        return _as_datetime_series(data)
     except Exception as e:
         print(f"  [WARN] Could not fetch FRED series {series_id}: {e}")
         return None
@@ -36,8 +71,10 @@ def fetch_macro_data():
     print("[Section 1] Fetching FRED macro data...")
     fred = Fred(api_key=FRED_API_KEY)
 
-    # We need 5+ years of history for the 5yr comparison
-    fetch_start = datetime.now() - timedelta(days=2000)
+    # 2555 days ≈ 7 years; gives headroom for the 5yr comparison and for
+    # licensed series (e.g. ICE BofA spreads) that FRED only distributes
+    # for a rolling ~3-year window via the API.
+    fetch_start = datetime.now() - timedelta(days=2555)
     dates = period_dates()
 
     # Fetch all series histories once (much more efficient than per-period calls)
