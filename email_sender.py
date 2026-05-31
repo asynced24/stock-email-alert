@@ -19,6 +19,11 @@ from datetime             import datetime
 from config import EMAIL_SENDER, EMAIL_APP_PASSWORD, EMAIL_RECIPIENT
 
 
+def _recipient_list():
+    """EMAIL_RECIPIENT may be a comma-separated list; return clean addresses."""
+    return [a.strip() for a in str(EMAIL_RECIPIENT or "").split(",") if a.strip()]
+
+
 def send_report(pdf_path: str) -> bool:
     """
     Send the PDF report by email.
@@ -62,10 +67,11 @@ Regards,
 Your Automated Market Report
 """
 
+    recipients = _recipient_list()
     try:
         msg = MIMEMultipart()
         msg["From"]    = EMAIL_SENDER
-        msg["To"]      = EMAIL_RECIPIENT
+        msg["To"]      = ", ".join(recipients)
         msg["Subject"] = subject
         msg.attach(MIMEText(body, "plain"))
 
@@ -81,9 +87,9 @@ Your Automated Market Report
         # Send via Gmail SMTP
         with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
             server.login(EMAIL_SENDER, EMAIL_APP_PASSWORD)
-            server.sendmail(EMAIL_SENDER, EMAIL_RECIPIENT, msg.as_string())
+            server.sendmail(EMAIL_SENDER, recipients, msg.as_string())
 
-        print(f"[Email] Report sent to {EMAIL_RECIPIENT}")
+        print(f"[Email] Report sent to {', '.join(recipients)}")
         return True
 
     except smtplib.SMTPAuthenticationError:
@@ -101,18 +107,19 @@ def send_alert(subject: str, body: str) -> bool:
     Used to surface data-source failures during scheduled runs, where stdout
     is not watched. Best-effort: returns False (and prints) if not configured.
     """
-    if not EMAIL_SENDER or not EMAIL_APP_PASSWORD or not EMAIL_RECIPIENT:
+    recipients = _recipient_list()
+    if not EMAIL_SENDER or not EMAIL_APP_PASSWORD or not recipients:
         print(f"[Alert] (email not configured) {subject}: {body}")
         return False
     try:
         msg = MIMEMultipart()
         msg["From"]    = EMAIL_SENDER
-        msg["To"]      = EMAIL_RECIPIENT
+        msg["To"]      = ", ".join(recipients)
         msg["Subject"] = f"[Stock Report ALERT] {subject}"
         msg.attach(MIMEText(body, "plain"))
         with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
             server.login(EMAIL_SENDER, EMAIL_APP_PASSWORD)
-            server.sendmail(EMAIL_SENDER, EMAIL_RECIPIENT, msg.as_string())
+            server.sendmail(EMAIL_SENDER, recipients, msg.as_string())
         print(f"[Alert] Sent: {subject}")
         return True
     except Exception as e:

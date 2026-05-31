@@ -16,3 +16,6 @@ Thumbs.db
 # Pytest / cache dirs
 cache/
 .pytest_cache/
+
+run_log.txt
+stock_report_*.pdf
