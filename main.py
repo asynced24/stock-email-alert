@@ -19,7 +19,6 @@ import traceback
 from datetime import datetime
 
 import pytz
-import schedule
 
 from config import REPORT_OUTPUT_PATH, REPORT_TIMEZONE, REPORT_HOUR
 
@@ -200,29 +199,30 @@ def generate_and_send(send_email: bool = True):
 
 
 def scheduled_job():
-    """Wrapper for the schedule library — generates and sends the report."""
+    """Wrapper kept for reference — generates and sends the report."""
     generate_and_send(send_email=True)
 
 
+def is_send_due(now_et, schedule_spec):
+    """True if now_et (tz-aware ET) matches any (weekday_name, 'HH:MM') slot to the minute."""
+    day = now_et.strftime("%A").lower()
+    hhmm = now_et.strftime("%H:%M")
+    return any(day == d and hhmm == t for d, t in schedule_spec)
+
+
 def run_scheduler():
-    """
-    Start the scheduler daemon.
-    Sends the report every day at REPORT_HOUR (8 PM) in REPORT_TIMEZONE.
-    """
+    """Poll once a minute; send when an ET schedule slot matches. Guards against double-send."""
+    from config import SEND_SCHEDULE
     tz = pytz.timezone(REPORT_TIMEZONE)
-    send_time = f"{REPORT_HOUR:02d}:00"
-
-    print(f"[Scheduler] Starting. Report will send daily at {send_time} {REPORT_TIMEZONE}.")
-    print("            Press Ctrl+C to stop.\n")
-
-    # schedule uses local system time, so we convert 8 PM ET to local
-    # Simpler: just schedule at the correct UTC offset hour using a check loop.
-    schedule.every().day.at(send_time).do(scheduled_job)
-
+    print(f"[Scheduler] Active. Slots (ET): {SEND_SCHEDULE}. Ctrl+C to stop.")
+    last_fired = None
     while True:
         now_et = datetime.now(tz)
-        schedule.run_pending()
-        time.sleep(30)   # check every 30 seconds
+        stamp = now_et.strftime("%Y-%m-%d %H:%M")
+        if is_send_due(now_et, SEND_SCHEDULE) and stamp != last_fired:
+            last_fired = stamp
+            generate_and_send(send_email=True)
+        time.sleep(20)
 
 
 def main():

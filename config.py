@@ -27,6 +27,9 @@ REPORT_OUTPUT_PATH = "stock_report.pdf"
 REPORT_TIMEZONE = "America/New_York"
 REPORT_HOUR     = 20   # 8 PM Eastern
 
+# Delivery schedule (Eastern Time): list of (weekday_name_lowercase, "HH:MM")
+SEND_SCHEDULE = [("wednesday", "20:00"), ("saturday", "08:00")]
+
 # ── FRED Series: {series_id: (human_label, units)} ───────────
 FRED_SERIES = {
     "WALCL":        ("Fed Total Assets",                     "USD Billions"),
