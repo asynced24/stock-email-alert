@@ -1,17 +1,90 @@
 """
 Section 1: Macro Data via FRED API.
 Fetches all configured series plus the computed Yield Curve (DGS10 - DGS2).
+Also prepends index rows (S&P 500, Dow, QQQ, Russell 2000, DXY) and
+valuation rows (Shiller PE, Buffett Indicator) before the FRED series.
 Returns a list of row dicts for the PDF table.
 """
 from datetime import datetime, timedelta
+import re
 
+import requests
+from bs4 import BeautifulSoup
 from fredapi import Fred
+import yfinance as yf
 
-from config import FRED_API_KEY, FRED_SERIES
-from helpers import safe_pct_change, format_pct, format_val, get_value_on_or_before, period_dates, PERIODS
+from config import FRED_API_KEY, FRED_SERIES, MACRO_INDEX_TICKERS
+from helpers import (safe_pct_change, format_pct, format_val,
+                     get_value_on_or_before, period_dates, PERIODS,
+                     pct_change_over, scraper_headers)
 
 # Yield curve is DGS10 - DGS2 (computed, not a FRED series)
-YIELD_CURVE_META = ("Yield Curve (10Y Yield − 2Y Yield)", "Percentage Points (%pts)")
+YIELD_CURVE_META = ("Yield Curve (10Y Yield - 2Y Yield)", "Percentage Points (%pts)")
+
+# Session counts used for index-row pct calculations
+_S1_SESS = {"5d": 5, "1mo": 21, "3mo": 63, "6mo": 126, "1yr": 252, "5yr": 1260}
+
+
+def _index_rows_from_history(index_map, closes_provider):
+    """Build Section-1 index rows from a closes_provider(ticker) -> Series | None."""
+    rows = []
+    for ticker, (label, units) in index_map.items():
+        closes = closes_provider(ticker)
+        row = {
+            "metric":  f"{label} [{units}]",
+            "current": "NA" if closes is None else f"{float(closes.iloc[-1]):.2f}",
+        }
+        for p in ("5d", "1mo", "3mo", "6mo", "1yr", "5yr"):
+            row[p] = ("NA" if closes is None
+                      else format_pct(pct_change_over(closes, _S1_SESS[p])))
+        rows.append(row)
+    return rows
+
+
+def _fetch_index_closes(ticker):
+    """Fetch a 6-year close history for an equity/index ticker via yfinance."""
+    try:
+        h = yf.Ticker(ticker).history(period="6y", auto_adjust=True)
+        if h.empty:
+            return None
+        if h.index.tz is not None:
+            h.index = h.index.tz_localize(None)
+        return h["Close"].dropna()
+    except Exception:
+        return None
+
+
+def _scrape_multpl(url):
+    """Return the current value as a float from a multpl.com page, or None."""
+    try:
+        r = requests.get(url, headers=scraper_headers(), timeout=20)
+        r.raise_for_status()
+        soup = BeautifulSoup(r.text, "lxml")
+        el = soup.find("div", {"id": "current"})
+        if not el:
+            return None
+        m = re.search(r"[-+]?\d[\d,]*\.?\d*", el.get_text())
+        return float(m.group().replace(",", "")) if m else None
+    except Exception:
+        return None
+
+
+def _valuation_rows():
+    """Return Shiller PE and Buffett Indicator rows (current only; period changes are NA)."""
+    rows = []
+    for label, url in (
+        ("Shiller PE",        "https://www.multpl.com/shiller-pe"),
+        ("Buffett Indicator", "https://www.multpl.com/buffett-indicator"),
+    ):
+        val = _scrape_multpl(url)
+        row = {
+            "metric":  f"{label} [Ratio]",
+            "current": "NA" if val is None else f"{val:.2f}",
+        }
+        for p in ("5d", "1mo", "3mo", "6mo", "1yr", "5yr"):
+            row[p] = "NA"   # multpl gives only the current level
+        rows.append(row)
+    return rows
 
 
 def _fetch_series(fred, series_id, start_date):
@@ -123,6 +196,13 @@ def fetch_macro_data():
         yc_row[period] = format_pct(safe_pct_change(yc_current, yc_past))
 
     rows.append(yc_row)
+
+    # Prepend index + valuation rows ABOVE the FRED series
+    print("[Section 1] Fetching index rows (yfinance)...")
+    index_rows = _index_rows_from_history(MACRO_INDEX_TICKERS, _fetch_index_closes)
+    print("[Section 1] Fetching valuation rows (multpl.com)...")
+    valuation_rows = _valuation_rows()
+    rows = index_rows + valuation_rows + rows
 
     print(f"[Section 1] Done. {len(rows)} metrics fetched.")
     return rows

@@ -202,7 +202,7 @@ class ReportPDF(FPDF):
 
 # ── Table Layout Helpers ──────────────────────────────────────
 
-PCT_COLS_STD = {2, 3, 4, 5, 6}   # columns 2-6 are percentage change cols
+PCT_COLS_STD = {2, 3, 4, 5, 6, 7}   # the six percentage columns in 8-col std tables
 
 def _std_pct_cols():
     return PCT_COLS_STD
@@ -210,31 +210,28 @@ def _std_pct_cols():
 
 # ── Section 1: FRED Macro ─────────────────────────────────────
 
-S1_HEADERS = ["Metric [Units]", "Current Value", "5 Day %", "1 Month %", "6 Month %", "1 Year %", "5 Year %"]
-S1_WIDTHS  = [98, 30, 25, 25, 25, 25, 25]   # total ≈ 253 → pad last col
-# Recalculate to fill USABLE
+S1_HEADERS = ["Metric [Units]", "Current", "5 Day %", "1 Month %", "3 Month %",
+              "6 Month %", "1 Year %", "5 Year %"]
+S1_WIDTHS  = [90, 26, 21, 21, 21, 21, 21, 21]
 _diff = USABLE - sum(S1_WIDTHS)
-S1_WIDTHS[0] += _diff   # absorb any rounding into first col
+S1_WIDTHS[0] += _diff
 
 
 def _s1_rows(data):
-    return [
-        [r["metric"], r["current"], r["5d"], r["1mo"], r["6mo"], r["1yr"], r["5yr"]]
-        for r in data
-    ]
+    return [[r["metric"], r["current"], r["5d"], r["1mo"], r["3mo"],
+             r["6mo"], r["1yr"], r["5yr"]] for r in data]
 
 
 # ── Section 2: Commodities ────────────────────────────────────
 
-S2_HEADERS = ["Commodity [Units]", "Current Price", "5 Day %", "1 Month %", "6 Month %", "1 Year %", "5 Year %"]
+S2_HEADERS = ["Commodity [Units]", "Current Price", "5 Day %", "1 Month %", "3 Month %",
+              "6 Month %", "1 Year %", "5 Year %"]
 S2_WIDTHS  = S1_WIDTHS[:]
 
 
 def _s2_rows(data):
-    return [
-        [r["commodity"], r["current"], r["5d"], r["1mo"], r["6mo"], r["1yr"], r["5yr"]]
-        for r in data
-    ]
+    return [[r["commodity"], r["current"], r["5d"], r["1mo"], r["3mo"],
+             r["6mo"], r["1yr"], r["5yr"]] for r in data]
 
 
 # ── Section 3: Industries ─────────────────────────────────────

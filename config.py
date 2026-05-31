@@ -73,6 +73,15 @@ FRED_SERIES = {
     "STLFSI4":      ("St. Louis Financial Stress Index",     "Index"),
 }
 
+# ── Index/Valuation rows shown ABOVE the FRED series in Section 1 ─
+MACRO_INDEX_TICKERS = {
+    "^GSPC":    ("S&P 500",               "Index"),
+    "^DJI":     ("Dow Jones",             "Index"),
+    "QQQ":      ("Invesco QQQ",           "USD/Share"),
+    "^RUT":     ("Russell 2000",          "Index"),
+    "DX-Y.NYB": ("US Dollar Index (DXY)", "Index"),
+}
+
 # ── Yahoo Finance Commodity Tickers: {ticker: (label, units)} ─
 COMMODITY_TICKERS = {
     "^VIX":     ("CBOE Volatility Index",            "Index (Points)"),
