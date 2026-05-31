@@ -32,19 +32,78 @@ from pdf_builder         import build_pdf
 from email_sender        import send_report
 
 
+def _make_options_checker():
+    """Return a sym->bool checker for option availability (best-effort via yfinance)."""
+    import yfinance as yf
+    def has_options(sym):
+        try:
+            return bool(yf.Ticker(sym).options)
+        except Exception:
+            return False
+    return has_options
+
+
+def _inject_buffett(macro_data, universe_df):
+    """Compute the Buffett Indicator (total US market cap / GDP) and set its row."""
+    try:
+        if universe_df is None or universe_df.empty:
+            return
+        import pandas as pd
+        from fredapi import Fred
+        from config import FRED_API_KEY
+        total_cap = float(pd.to_numeric(universe_df["market_cap"], errors="coerce").sum())
+        gdp_billions = float(Fred(api_key=FRED_API_KEY).get_series("GDP").dropna().iloc[-1])
+        buffett = total_cap / (gdp_billions * 1e9) * 100.0
+        for row in macro_data:
+            if str(row.get("metric", "")).startswith("Buffett Indicator"):
+                row["current"] = f"{buffett:.1f}%"
+                break
+        print(f"[Macro] Buffett Indicator computed: {buffett:.1f}%")
+    except Exception as e:
+        print(f"  [WARN] Buffett indicator computation failed: {e}")
+
+
 def generate_and_send(send_email: bool = True):
     """
-    Full pipeline: fetch all data → build PDF → (optionally) email it.
-    Each section is wrapped in try/except so one failure doesn't abort the report.
+    Full pipeline: build shared data layer -> fetch all sections -> build PDF -> (optionally) email.
+    Each step is guarded so one failure doesn't abort the report.
     """
     start = datetime.now()
     print("=" * 70)
-    print(f"  Stock Market Report — {start.strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"  Stock Market Report - {start.strftime('%Y-%m-%d %H:%M:%S')}")
     print("=" * 70)
 
-    # ── Section 1: FRED Macro ────────────────────────────────
+    from universe import fetch_universe, filter_by_market_cap
+    from price_history import fetch_history
+    import screens
+    from config import MIN_CAP_SCREENS
+
+    # ── Shared data layer ────────────────────────────────────
+    try:
+        universe_df = fetch_universe()
+    except Exception:
+        print("[Universe] CRITICAL FAILURE:")
+        traceback.print_exc()
+        universe_df = None
+
+    if universe_df is None or universe_df.empty:
+        print("[ALERT] Universe unavailable — full-market sections (3,4,6,7,8,9) will be empty this run.")
+        panel = None
+    else:
+        try:
+            screen_syms = list(filter_by_market_cap(universe_df, MIN_CAP_SCREENS)["symbol"])
+            panel = fetch_history(screen_syms)
+        except Exception:
+            print("[History] CRITICAL FAILURE:")
+            traceback.print_exc()
+            panel = None
+
+    have_market = universe_df is not None and not universe_df.empty and panel is not None and not getattr(panel, "empty", True)
+
+    # ── Section 1: FRED Macro (+ indices, valuation) ─────────
     try:
         macro_data = fetch_macro_data()
+        _inject_buffett(macro_data, universe_df)
     except Exception:
         print("[Section 1] CRITICAL FAILURE:")
         traceback.print_exc()
@@ -58,42 +117,69 @@ def generate_and_send(send_email: bool = True):
         traceback.print_exc()
         materials_data = []
 
-    # ── Section 3: Industries ────────────────────────────────
+    # ── Section 3: Industries (universe member-averaged) ─────
     try:
-        industries_data = fetch_industries_data()
+        industries_data = fetch_industries_data(universe_df, panel)
+        if not industries_data:
+            print("[ALERT] Section 3 industries empty — check the universe source.")
     except Exception:
         print("[Section 3] CRITICAL FAILURE:")
         traceback.print_exc()
         industries_data = []
 
-    # ── Section 4: Companies of Interest ────────────────────
+    # ── Section 4: Companies of Interest (3 tables) ──────────
     try:
-        companies_data = fetch_companies_data(industries_data)
+        companies_data = fetch_companies_data(universe_df, panel, MIN_CAP_SCREENS)
     except Exception:
         print("[Section 4] CRITICAL FAILURE:")
         traceback.print_exc()
-        companies_data = []
+        companies_data = {"five_day": [], "one_month": [], "volume": []}
 
-    # ── Section 5: Earnings Calendar ─────────────────────────
+    # ── Section 5: Earnings Calendar (>=$5B) ─────────────────
     try:
-        earnings_data = fetch_earnings_data()
+        earnings_data = fetch_earnings_data(universe_df)
     except Exception:
         print("[Section 5] CRITICAL FAILURE:")
         traceback.print_exc()
         earnings_data = []
 
+    # ── Sections 6-9: Screens ────────────────────────────────
+    section6 = section7 = section8 = section9 = []
+    if have_market:
+        try:
+            section6 = screens.long_term_pullback(universe_df, panel, MIN_CAP_SCREENS,
+                                                  has_options=_make_options_checker())
+        except Exception:
+            print("[Section 6] FAILURE:"); traceback.print_exc()
+        try:
+            section7 = screens.momentum_pullback(universe_df, panel, MIN_CAP_SCREENS)
+        except Exception:
+            print("[Section 7] FAILURE:"); traceback.print_exc()
+        try:
+            section8 = screens.reversal_bounce(universe_df, panel, MIN_CAP_SCREENS)
+        except Exception:
+            print("[Section 8] FAILURE:"); traceback.print_exc()
+        try:
+            section9 = screens.near_ma(universe_df, panel, MIN_CAP_SCREENS)
+        except Exception:
+            print("[Section 9] FAILURE:"); traceback.print_exc()
+
     # ── Build PDF ────────────────────────────────────────────
     try:
         pdf_path = build_pdf(
-            macro_data      = macro_data,
-            materials_data  = materials_data,
-            industries_data = industries_data,
-            companies_data  = companies_data,
-            earnings_data   = earnings_data,
-            output_path     = REPORT_OUTPUT_PATH,
+            macro_data=macro_data,
+            materials_data=materials_data,
+            industries_data=industries_data,
+            companies_data=companies_data,
+            earnings_data=earnings_data,
+            section6_data=section6,
+            section7_data=section7,
+            section8_data=section8,
+            section9_data=section9,
+            output_path=REPORT_OUTPUT_PATH,
         )
     except Exception:
-        print("[PDF] CRITICAL FAILURE — PDF could not be built:")
+        print("[PDF] CRITICAL FAILURE - PDF could not be built:")
         traceback.print_exc()
         return
 
