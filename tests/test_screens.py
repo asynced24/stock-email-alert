@@ -52,3 +52,26 @@ def test_reversal_bounce(sample_universe):
     panel = _panel_from({"AAA": (closes, [1] * len(closes))})
     rows = screens.reversal_bounce(sample_universe, panel, min_cap=2e9)
     assert any(r["symbol"] == "AAA" for r in rows)
+
+
+def _long_pullback_series():
+    vals = [80.0] * 1260
+    vals[0] = 50.0            # ~5yr ago
+    vals[1260 - 253] = 70.0   # ~1yr ago
+    vals[1260 - 64] = 110.0   # ~3mo ago
+    vals[-1] = 95.0           # now
+    return vals
+
+
+def test_long_term_pullback_flags(sample_universe):
+    panel = _panel_from({"AAA": (_long_pullback_series(), [1] * 1260)})
+    rows = screens.long_term_pullback(sample_universe, panel, min_cap=2e9,
+                                      has_options=lambda s: True)
+    assert any(r["symbol"] == "AAA" for r in rows)
+
+
+def test_long_term_pullback_requires_options(sample_universe):
+    panel = _panel_from({"AAA": (_long_pullback_series(), [1] * 1260)})
+    rows = screens.long_term_pullback(sample_universe, panel, min_cap=2e9,
+                                      has_options=lambda s: False)
+    assert all(r["symbol"] != "AAA" for r in rows)

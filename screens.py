@@ -9,7 +9,7 @@ from helpers import pct_change_over, format_pct, format_val
 from price_history import closes_for, volumes_for
 
 # trading-session offsets per lookback
-SESS = {"5d": 5, "1mo": 21, "3mo": 63, "1yr": 252}
+SESS = {"5d": 5, "1mo": 21, "3mo": 63, "6mo": 126, "1yr": 252, "3yr": 756, "5yr": 1260}
 
 
 def _cap_filtered(universe_df, min_cap):
@@ -92,19 +92,45 @@ def momentum_pullback(universe_df, panel, min_cap):
 
 
 def reversal_bounce(universe_df, panel, min_cap):
-    """Down >15% over the year AND up >5% over the week.
+    """Down >20% over the year AND up >10% over the week or month (report Section 8)."""
+    out = []
+    for symbol in _cap_filtered(universe_df, min_cap)["symbol"]:
+        closes = closes_for(panel, symbol)
+        if closes is None or len(closes) < 200:
+            continue
+        yr_sessions = min(SESS["1yr"], len(closes) - 1)
+        yr = pct_change_over(closes, yr_sessions)
+        if yr == "NA" or yr > -20:
+            continue
+        ups = [pct_change_over(closes, SESS[p]) for p in ("5d", "1mo")]
+        if any(u != "NA" and u >= 10 for u in ups):
+            out.append(_base_row(universe_df, symbol, closes))
+    return out
 
-    Requires ~10 months (200 sessions) of history for the yearly trend to be
-    meaningful. Measures the yearly change over up to 252 sessions.
+
+def long_term_pullback(universe_df, panel, min_cap, has_options=None):
+    """
+    Long-term winner pulling back, optionable (report Section 6):
+      >0% over ~5yr AND >20% over 1yr AND < -10% over 3mo, optionable.
+    `has_options` is an optional callable sym->bool so this module stays network-free;
+    main.py supplies a yfinance-backed checker. Requires >=3yr of history so the
+    5-year change is meaningful.
     """
     out = []
     for symbol in _cap_filtered(universe_df, min_cap)["symbol"]:
         closes = closes_for(panel, symbol)
-        if closes is None or len(closes) < 200:   # need ~10mo of history for a yearly trend
+        if closes is None or len(closes) < 756:   # ~3yr min
             continue
-        yr_sessions = min(SESS["1yr"], len(closes) - 1)
-        yr = pct_change_over(closes, yr_sessions)
-        wk = pct_change_over(closes, SESS["5d"])
-        if yr != "NA" and yr <= -15 and wk != "NA" and wk >= 5:
-            out.append(_base_row(universe_df, symbol, closes))
+        lt = pct_change_over(closes, min(SESS["5yr"], len(closes) - 1))
+        yr = pct_change_over(closes, SESS["1yr"])
+        m3 = pct_change_over(closes, SESS["3mo"])
+        if lt == "NA" or lt <= 0:
+            continue
+        if yr == "NA" or yr <= 20:
+            continue
+        if m3 == "NA" or m3 >= -10:
+            continue
+        if has_options is not None and not has_options(symbol):
+            continue
+        out.append(_base_row(universe_df, symbol, closes))
     return out
