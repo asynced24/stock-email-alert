@@ -136,6 +136,7 @@ MANTRA = ["Filter", "Assess", "Risk", "Position", "Entrance", "Exit"]
 MANTRA_DEFS = [
     ("Filter",   "Use this program to filter for macro trends, industry, company specific."),
     ("Assess",   "What? Why? Who? Where? When? Intrinsic Value."),
+    ("Risk",     "Define max loss and stop/exit before entering. Never risk more than the plan allows."),
     ("Position", "Risk assessment, type of trade, expected returns. Plan for escape if things turn bad."),
     ("Entrance", "Capital allocation, what is the best deal? DCA or full? Hold period."),
     ("Exit",     "When to exit. What return would I be satisfied with?"),

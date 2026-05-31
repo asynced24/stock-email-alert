@@ -122,6 +122,30 @@ def pct_change_over(closes, n_sessions):
         return "NA"
 
 
+def pct_change_ytd(closes):
+    """
+    Year-to-date percent change: latest close vs the last close of the PREVIOUS
+    calendar year (the standard "this year" lens). Returns a float, or 'NA' if
+    there is no prior-year close in the series.
+    """
+    try:
+        import pandas as pd
+        closes = closes.dropna()
+        if closes.empty:
+            return "NA"
+        current = float(closes.iloc[-1])
+        year = closes.index[-1].year
+        prior = closes[closes.index < pd.Timestamp(year, 1, 1)]
+        if prior.empty:
+            return "NA"
+        base = float(prior.iloc[-1])
+        if base == 0:
+            return "NA"
+        return round(((current - base) / abs(base)) * 100, 2)
+    except Exception:
+        return "NA"
+
+
 def scraper_headers():
     """Return browser-like headers for web scraping."""
     return {

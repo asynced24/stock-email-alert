@@ -5,7 +5,7 @@ No network. Each returns a list of row dicts ready for the PDF tables.
 """
 import pandas as pd
 
-from helpers import pct_change_over, format_pct, format_val
+from helpers import pct_change_over, pct_change_ytd, format_pct, format_val
 from price_history import closes_for
 
 # trading-session offsets per lookback
@@ -74,18 +74,19 @@ def momentum_pullback(universe_df, panel, min_cap):
 
 
 def reversal_bounce(universe_df, panel, min_cap):
-    """Down >20% over the year AND up >10% over the week or month (report Section 8).
+    """
+    Down >20% year-to-date AND up >10% over the week or month (report Section 8).
 
-    Requires a FULL year (>=253 sessions) so the 1-year change uses a true 252-session
-    window.
+    "This year" = calendar year-to-date (from the previous year's last close), the
+    standard lens for spotting a beaten-down name turning up.
     """
     out = []
     for symbol in _cap_filtered(universe_df, min_cap)["symbol"]:
         closes = closes_for(panel, symbol)
-        if closes is None or len(closes) < SESS["1yr"] + 1:
+        if closes is None or len(closes) < SESS["1mo"] + 1:   # need ~1 month for the up move
             continue
-        yr = pct_change_over(closes, SESS["1yr"])
-        if yr == "NA" or yr > -20:
+        ytd = pct_change_ytd(closes)
+        if ytd == "NA" or ytd > -20:
             continue
         ups = [pct_change_over(closes, SESS[p]) for p in ("5d", "1mo")]
         if any(u != "NA" and u >= 10 for u in ups):

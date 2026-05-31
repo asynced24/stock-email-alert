@@ -54,21 +54,30 @@ def _make_options_checker(pace=0.25, retries=3):
 
 
 def _inject_buffett(macro_data, universe_df):
-    """Compute the Buffett Indicator (total US market cap / GDP) and set its row."""
+    """
+    Compute the Buffett Indicator (total US market cap / GDP) and set its row.
+
+    Dual-class share lines (e.g. GOOG + GOOGL, BRK-A + BRK-B) each carry the full
+    company market cap, so we de-duplicate by company name before summing to avoid
+    double-counting. It remains approximate (foreign ADRs add some cap not tied to
+    US GDP), hence the "(approx.)" label on the row.
+    """
     try:
         if universe_df is None or universe_df.empty:
             return
         import pandas as pd
         from fredapi import Fred
         from config import FRED_API_KEY
-        total_cap = float(pd.to_numeric(universe_df["market_cap"], errors="coerce").sum())
+        deduped = universe_df.drop_duplicates(subset="name")
+        total_cap = float(pd.to_numeric(deduped["market_cap"], errors="coerce").sum())
         gdp_billions = float(Fred(api_key=FRED_API_KEY).get_series("GDP").dropna().iloc[-1])
         buffett = total_cap / (gdp_billions * 1e9) * 100.0
         for row in macro_data:
             if str(row.get("metric", "")).startswith("Buffett Indicator"):
                 row["current"] = f"{buffett:.1f}%"
                 break
-        print(f"[Macro] Buffett Indicator computed: {buffett:.1f}%")
+        print(f"[Macro] Buffett Indicator computed: {buffett:.1f}% "
+              f"({len(universe_df) - len(deduped)} dual-class lines deduped)")
     except Exception as e:
         print(f"  [WARN] Buffett indicator computation failed: {e}")
 

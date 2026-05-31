@@ -1,5 +1,19 @@
 import pandas as pd
-from helpers import PERIODS, PERIOD_LABELS, period_dates, pct_change_over
+from helpers import PERIODS, PERIOD_LABELS, period_dates, pct_change_over, pct_change_ytd
+
+
+def test_pct_change_ytd_uses_prior_year_close():
+    idx = pd.date_range("2024-12-02", periods=40, freq="B")
+    # 2024 closes = 100, 2025 closes = 80  ->  YTD from last 2024 close (100) is -20%
+    vals = [100.0 if d.year == 2024 else 80.0 for d in idx]
+    s = pd.Series(vals, index=idx)
+    assert pct_change_ytd(s) == -20.0
+
+
+def test_pct_change_ytd_no_prior_year_returns_na():
+    idx = pd.date_range("2025-02-01", periods=10, freq="B")   # no previous-year close
+    s = pd.Series([100.0] * 10, index=idx)
+    assert pct_change_ytd(s) == "NA"
 
 
 def test_3mo_period_registered():
