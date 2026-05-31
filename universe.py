@@ -135,3 +135,36 @@ def fetch_universe():
     except Exception as e:
         print(f"  [WARN] Universe fetch failed: {e}")
         return None
+
+
+SP500_WIKI_URL = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
+
+
+def sp500_fallback():
+    """
+    Last-resort universe when the StockAnalysis screener is unavailable: the S&P 500
+    constituents from Wikipedia (symbol, name, GICS sector as 'industry'). These are
+    all large-cap (>$5B), so market_cap is set to a placeholder above the screen
+    floors; price/volume/P-E come from the yfinance history downstream (shown as NA
+    where unavailable). Returns a DataFrame in the universe schema, or None.
+    """
+    try:
+        import io
+        resp = requests.get(SP500_WIKI_URL, headers=scraper_headers(), timeout=25)
+        resp.raise_for_status()
+        table = pd.read_html(io.StringIO(resp.text))[0]
+        out = pd.DataFrame({
+            "symbol":     table["Symbol"].astype(str).str.replace(".", "-", regex=False),
+            "name":       table["Security"].astype(str),
+            "market_cap": 1e10,   # placeholder: S&P 500 names all clear the $2B/$5B floors
+            "price":      pd.NA,
+            "change":     pd.NA,
+            "industry":   table["GICS Sector"].astype(str),
+            "volume":     pd.NA,
+            "pe_ratio":   pd.NA,
+        })
+        print(f"[Universe] S&P 500 fallback loaded {len(out)} names from Wikipedia.")
+        return out
+    except Exception as e:
+        print(f"  [WARN] S&P 500 fallback failed: {e}")
+        return None

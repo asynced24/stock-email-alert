@@ -40,15 +40,17 @@ def _fmt_volume(v):
 def _volume_metrics(vols):
     """
     From a volume Series (DatetimeIndex), return:
-      avg2wk    - mean volume over the last 10 trading days (~2 weeks)
+      avg2wk    - mean daily volume over the 2 weeks (10 trading days) BEFORE the
+                  last 3 days (the regular-volume baseline, excluding the spike window)
       spike     - peak volume over the last 3 days / avg2wk
       peak_vol  - highest single-day volume over the last 3 days
       peak_date - the date that peak volume was recorded (YYYY-MM-DD)
     Returns (None, None, None, None) if there isn't enough data.
     """
-    if vols is None or len(vols) < 10:
+    if vols is None or len(vols) < 13:
         return None, None, None, None
-    avg2wk = float(vols.tail(10).mean())
+    # 10 sessions ending just before the last 3 — so the spike doesn't inflate its own baseline
+    avg2wk = float(vols.iloc[-13:-3].mean())
     last3 = vols.tail(3)
     peak_vol = float(last3.max())
     try:

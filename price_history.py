@@ -8,10 +8,17 @@ import os
 from datetime import datetime
 
 import pandas as pd
+import pytz
 import yfinance as yf
 
 CACHE_DIR  = "cache"
 CHUNK_SIZE = 150
+
+
+def _today_et():
+    """Cache key date in US/Eastern, so the Wed-night / Sat-morning runs key correctly
+    regardless of the machine's timezone."""
+    return datetime.now(pytz.timezone("America/New_York")).strftime("%Y-%m-%d")
 
 
 def _cache_path(date_str):
@@ -54,7 +61,7 @@ def fetch_history(tickers, use_cache=True):
     Returns a wide DataFrame with MultiIndex columns (ticker, field).
     """
     os.makedirs(CACHE_DIR, exist_ok=True)
-    date_str = datetime.now().strftime("%Y-%m-%d")
+    date_str = _today_et()
     path = _cache_path(date_str)
 
     if use_cache and os.path.exists(path):
@@ -66,17 +73,30 @@ def fetch_history(tickers, use_cache=True):
     print(f"[History] Downloading {len(tickers)} tickers in {len(chunks)} chunks...")
 
     frames = []
+    failed = 0
     for i, chunk in enumerate(chunks, 1):
         try:
             frames.append(_download_chunk(chunk))
             print(f"  chunk {i}/{len(chunks)} OK ({len(chunk)} tickers)")
         except Exception as e:
+            failed += 1
             print(f"  chunk {i}/{len(chunks)} FAILED: {e}")
 
     if not frames:
+        print("[History] All chunks failed - returning empty panel (not cached).")
         return pd.DataFrame()
 
     panel = pd.concat(frames, axis=1)
-    panel.to_pickle(path)
-    print(f"[History] Cached to {path}.")
+    covered = panel.columns.get_level_values(0).nunique()
+    print(f"[History] Panel covers {covered} tickers of {len(tickers)} requested.")
+
+    # Only persist a COMPLETE panel. A partial cache would poison same-day reruns
+    # (a later full run would silently reload the smaller panel).
+    if failed == 0:
+        tmp = path + ".tmp"
+        panel.to_pickle(tmp)
+        os.replace(tmp, path)
+        print(f"[History] Cached to {path}.")
+    else:
+        print(f"[History] {failed} chunk(s) failed - NOT caching a partial panel.")
     return panel

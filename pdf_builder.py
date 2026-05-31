@@ -269,7 +269,7 @@ S4_MOVERS1_GRADIENT = {3, 4, 5, 6, 7}
 # 4c. Volume Spikes
 S4_VOL_HEADERS  = ["Company", "Ticker", "Price", "5 Day %", "Avg Vol (2wk)",
                    "Top Spike (3d)", "Peak Vol (3d)", "Peak Date"]
-S4_VOL_WIDTHS   = [86, 22, 24, 28, 34, 30, 30, 29]
+S4_VOL_WIDTHS   = [86, 22, 24, 28, 32, 30, 30, 29]   # sums to 281 (= USABLE)
 S4_VOL_WIDTHS[0] += USABLE - sum(S4_VOL_WIDTHS)
 S4_VOL_GRADIENT = {3}   # only the 5-day % is a gradient column
 
@@ -295,8 +295,7 @@ def _s4_vol_rows(data):
 
 S5_HEADERS = ["Date", "Ticker", "Company", "Time", "Mkt Cap"]
 S5_WIDTHS  = [40, 26, 150, 35, 30]
-_diff5 = USABLE - sum(S5_WIDTHS)
-S5_WIDTHS[2] += _diff5
+S5_WIDTHS[2] += USABLE - sum(S5_WIDTHS)   # any residual absorbed by the Company column
 
 
 def _s5_rows(data):
@@ -479,7 +478,7 @@ def build_pdf(
     Returns:
         output_path
     """
-    report_date = datetime.now().strftime("%B %d, %Y — %I:%M %p ET")
+    report_date = datetime.now().strftime("%B %d, %Y - %I:%M %p ET")
     print(f"[PDF] Building report: {report_date}")
 
     pdf = ReportPDF(report_date)
@@ -526,7 +525,7 @@ def build_pdf(
         pdf.no_data_notice()
 
     # 4b. >20% 1-Month Movers
-    pdf.section_title("Companies of Interest:  >20% 1-Month Movers")
+    pdf.section_title("Section 4 - Companies of Interest:  >20% 1-Month Movers")
     month = buckets.get("one_month", [])
     if month:
         pdf.table(S4_MOVERS1_HEADERS, S4_MOVERS1_WIDTHS, _s4_movers1_rows(month),
@@ -535,7 +534,7 @@ def build_pdf(
         pdf.no_data_notice()
 
     # 4c. Volume Spikes
-    pdf.section_title("Companies of Interest:  Volume Spikes")
+    pdf.section_title("Section 4 - Companies of Interest:  Volume Spikes")
     _explainer(pdf,
         "Volume spike = the single highest daily trading volume over the last 3 trading days "
         "is at least 2x the average daily volume of the prior 2 weeks (10 trading days). "
@@ -579,6 +578,27 @@ def build_pdf(
                      "Section 9 - Near 200-Day Moving Average  (within 5%, >=$5B)",
                      200, section9_200_data or [])
 
-    pdf.output(output_path)
-    print(f"[PDF] Saved to: {output_path}")
-    return output_path
+    return _write_pdf(pdf, output_path)
+
+
+def _write_pdf(pdf, output_path):
+    """
+    Write the PDF robustly. The target may be locked (e.g. open in a viewer on
+    Windows/OneDrive); rendering to a temp file and replacing avoids a half-written
+    file, and a timestamped fallback guarantees the run still produces an attachable
+    PDF instead of failing the whole report (and email).
+    """
+    import os
+    tmp = output_path + ".tmp"
+    pdf.output(tmp)   # render once to a scratch file
+    try:
+        os.replace(tmp, output_path)   # atomic on the same volume
+        print(f"[PDF] Saved to: {output_path}")
+        return output_path
+    except PermissionError:
+        base, ext = os.path.splitext(output_path)
+        stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        fallback = f"{base}_{stamp}{ext}"
+        os.replace(tmp, fallback)
+        print(f"[PDF] '{output_path}' is locked (open in a viewer?). Saved to: {fallback}")
+        return fallback

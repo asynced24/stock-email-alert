@@ -28,7 +28,7 @@ from section3_industries import fetch_industries_data
 from section4_companies  import fetch_companies_data
 from section5_earnings   import fetch_earnings_data
 from pdf_builder         import build_pdf
-from email_sender        import send_report
+from email_sender        import send_report, send_alert
 
 
 def _make_options_checker(pace=0.25, retries=3):
@@ -95,6 +95,19 @@ def generate_and_send(send_email: bool = True):
         print("[Universe] CRITICAL FAILURE:")
         traceback.print_exc()
         universe_df = None
+
+    if universe_df is None or universe_df.empty:
+        from universe import sp500_fallback
+        universe_df = sp500_fallback()
+        if universe_df is not None and not universe_df.empty:
+            send_alert("Universe scrape failed - using S&P 500 fallback",
+                       "The StockAnalysis screener was unavailable. The report was built from "
+                       "the S&P 500 constituent list, so screens are limited to large caps and "
+                       "P/E and a few fields show NA. Check the source when convenient.")
+        else:
+            send_alert("Universe unavailable",
+                       "Both the StockAnalysis screener and the S&P 500 fallback failed. "
+                       "Sections 3, 4, 6, 7, 8 and 9 are empty in this run.")
 
     if universe_df is None or universe_df.empty:
         print("[ALERT] Universe unavailable — full-market sections (3,4,6,7,8,9) will be empty this run.")
@@ -202,16 +215,23 @@ def generate_and_send(send_email: bool = True):
     # ── Send Email ────────────────────────────────────────────
     if send_email:
         try:
-            send_report(pdf_path)
+            sent = send_report(pdf_path)
+            if not sent:
+                send_alert("Report email did not send",
+                           f"The report was built ({pdf_path}) but the email send returned "
+                           f"failure. Check email credentials / recipient configuration.")
         except Exception:
             print("[Email] CRITICAL FAILURE:")
             traceback.print_exc()
+            send_alert("Report email crashed",
+                       "An exception was raised while sending the report email. "
+                       "The PDF was generated but delivery failed.")
     else:
         print(f"[Email] Skipped (--no-email flag). PDF saved at: {pdf_path}")
 
     elapsed = (datetime.now() - start).total_seconds()
     print("=" * 70)
-    print(f"  Report complete in {elapsed:.1f}s -> {REPORT_OUTPUT_PATH}")
+    print(f"  Report complete in {elapsed:.1f}s -> {pdf_path}")
     print("=" * 70)
 
 
@@ -238,8 +258,20 @@ def run_scheduler():
         stamp = now_et.strftime("%Y-%m-%d %H:%M")
         if is_send_due(now_et, SEND_SCHEDULE) and stamp != last_fired:
             last_fired = stamp
-            generate_and_send(send_email=True)
-        time.sleep(20)
+            # An unhandled error in one run must NOT kill the daemon (which would
+            # silently miss all future deliveries). Catch, alert, and keep polling.
+            try:
+                generate_and_send(send_email=True)
+            except Exception:
+                print("[Scheduler] UNHANDLED EXCEPTION in generate_and_send:")
+                traceback.print_exc()
+                try:
+                    send_alert("Scheduled run crashed",
+                               "generate_and_send raised an unhandled exception; "
+                               "the scheduler is still running and will retry next slot.")
+                except Exception:
+                    pass
+        time.sleep(15)
 
 
 def main():

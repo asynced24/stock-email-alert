@@ -16,14 +16,15 @@ def test_split_movers_buckets_independent():
 
 
 def test_volume_metrics():
-    idx = pd.date_range("2026-01-01", periods=12, freq="B")
-    # 10-day window avg ~1000; last 3 days include a 5000 spike on the middle day
-    vals = [1000] * 9 + [1200, 5000, 1100]
+    idx = pd.date_range("2026-01-01", periods=15, freq="B")
+    # baseline (10 sessions before the last 3) is flat at 1000; last 3 include a 5000 spike
+    vals = [1000] * 12 + [1200, 5000, 1100]
     vols = pd.Series(vals, index=idx)
     avg2wk, spike, peak_vol, peak_date = _volume_metrics(vols)
+    assert avg2wk == 1000                              # baseline excludes the spike window
     assert peak_vol == 5000
-    assert peak_date == idx[10].strftime("%Y-%m-%d")   # the 5000 day
-    assert spike > 2.0                                 # 5000 / ~1.6k avg
+    assert peak_date == idx[13].strftime("%Y-%m-%d")   # the 5000 day
+    assert spike == 5.0                                # 5000 / 1000, not diluted by the spike
 
 
 def test_volume_metrics_insufficient_data():

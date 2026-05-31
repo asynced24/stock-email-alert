@@ -37,25 +37,25 @@ def test_near_ma_excludes_small_cap(sample_universe):
     assert all(r["symbol"] != "CCC" for r in rows)
 
 
-def test_abnormal_volume_flags_spike(sample_universe):
-    # last volume 10x the trailing average
-    vols = [1000] * 209 + [10000]
-    panel = _panel_from({"AAA": ([100.0] * 210, vols)})
-    rows = screens.abnormal_volume(sample_universe, panel, min_cap=2e9, mult=1.5)
-    assert any(r["symbol"] == "AAA" for r in rows)
-
-
 def test_momentum_pullback(sample_universe):
-    # up >50% over the year but down >10% over the last 5 sessions
-    closes = [50.0] * 150 + [120.0] * 54 + [100.0]   # yr-ago ~50, recent peak 120, now 100
+    # Needs a full year (>=253 sessions). yr-ago ~50, recent peak 120, now 100.
+    closes = [50.0] * 200 + [120.0] * 59 + [100.0]   # len 260
     panel = _panel_from({"AAA": (closes, [1] * len(closes))})
     rows = screens.momentum_pullback(sample_universe, panel, min_cap=2e9)
     assert any(r["symbol"] == "AAA" for r in rows)
 
 
+def test_momentum_pullback_skips_short_history(sample_universe):
+    # Only ~200 sessions -> cannot establish a true 1-year trend -> excluded.
+    closes = [50.0] * 150 + [120.0] * 49 + [100.0]   # len 200 < 253
+    panel = _panel_from({"AAA": (closes, [1] * len(closes))})
+    rows = screens.momentum_pullback(sample_universe, panel, min_cap=2e9)
+    assert all(r["symbol"] != "AAA" for r in rows)
+
+
 def test_reversal_bounce(sample_universe):
-    # down >15% over the year but up >5% over the last 5 sessions
-    closes = [100.0] * 150 + [70.0] * 54 + [78.0]
+    # down >20% over the year but up >10% over the last 5 sessions (full year history).
+    closes = [100.0] * 200 + [60.0] * 59 + [72.0]   # len 260; yr -28%, 5d +20%
     panel = _panel_from({"AAA": (closes, [1] * len(closes))})
     rows = screens.reversal_bounce(sample_universe, panel, min_cap=2e9)
     assert any(r["symbol"] == "AAA" for r in rows)

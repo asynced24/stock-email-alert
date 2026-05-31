@@ -33,6 +33,10 @@ def send_report(pdf_path: str) -> bool:
         print("[Email] Skipping email — EMAIL_SENDER or EMAIL_APP_PASSWORD not configured in config.py.")
         return False
 
+    if not EMAIL_RECIPIENT:
+        print("[Email] Skipping email — EMAIL_RECIPIENT not configured in .env.")
+        return False
+
     if not os.path.exists(pdf_path):
         print(f"[Email] PDF not found at {pdf_path}. Cannot send.")
         return False
@@ -88,4 +92,29 @@ Your Automated Market Report
         return False
     except Exception as e:
         print(f"[Email] Failed to send: {e}")
+        return False
+
+
+def send_alert(subject: str, body: str) -> bool:
+    """
+    Send a short plain-text alert email (no attachment) to EMAIL_RECIPIENT.
+    Used to surface data-source failures during scheduled runs, where stdout
+    is not watched. Best-effort: returns False (and prints) if not configured.
+    """
+    if not EMAIL_SENDER or not EMAIL_APP_PASSWORD or not EMAIL_RECIPIENT:
+        print(f"[Alert] (email not configured) {subject}: {body}")
+        return False
+    try:
+        msg = MIMEMultipart()
+        msg["From"]    = EMAIL_SENDER
+        msg["To"]      = EMAIL_RECIPIENT
+        msg["Subject"] = f"[Stock Report ALERT] {subject}"
+        msg.attach(MIMEText(body, "plain"))
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+            server.login(EMAIL_SENDER, EMAIL_APP_PASSWORD)
+            server.sendmail(EMAIL_SENDER, EMAIL_RECIPIENT, msg.as_string())
+        print(f"[Alert] Sent: {subject}")
+        return True
+    except Exception as e:
+        print(f"[Alert] Failed to send alert ({subject}): {e}")
         return False

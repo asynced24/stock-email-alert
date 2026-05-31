@@ -70,21 +70,20 @@ def _scrape_multpl(url):
 
 
 def _valuation_rows():
-    """Return Shiller PE and Buffett Indicator rows (current only; period changes are NA)."""
-    rows = []
-    for label, url in (
-        ("Shiller PE",        "https://www.multpl.com/shiller-pe"),
-        ("Buffett Indicator", "https://www.multpl.com/buffett-indicator"),
-    ):
-        val = _scrape_multpl(url)
-        row = {
-            "metric":  f"{label} [Ratio]",
-            "current": "NA" if val is None else f"{val:.2f}",
-        }
-        for p in ("5d", "1mo", "3mo", "6mo", "1yr", "5yr"):
-            row[p] = "NA"   # multpl gives only the current level
-        rows.append(row)
-    return rows
+    """
+    Shiller PE (scraped from multpl.com) and a Buffett Indicator placeholder.
+    The Buffett value is computed later in main._inject_buffett from the universe
+    market cap / GDP; it is approximate (the universe sums all listed names, so
+    dual-class shares and foreign ADRs inflate it vs the classic Wilshire/GDP ratio).
+    Period-change columns are always NA for these level metrics.
+    """
+    na = {p: "NA" for p in ("5d", "1mo", "3mo", "6mo", "1yr", "5yr")}
+    shiller = _scrape_multpl("https://www.multpl.com/shiller-pe")
+    return [
+        {"metric": "Shiller PE [Ratio]",
+         "current": "NA" if shiller is None else f"{shiller:.2f}", **na},
+        {"metric": "Buffett Indicator (approx.) [%]", "current": "NA", **na},
+    ]
 
 
 def _fetch_series(fred, series_id, start_date):
