@@ -253,20 +253,22 @@ def _s3_rows(data):
 
 # ── Section 4: Companies of Interest ─────────────────────────
 
-S4_HEADERS = ["Company", "Ticker", "Market Cap", "Price", "P/E Ratio", "Options", "5 Day %", "1 Month %"]
-S4_WIDTHS  = [70, 20, 30, 22, 22, 18, 28, 28]
+S4_HEADERS = ["Company", "Ticker", "Price", "5 Day %", "1 Month %", "3 Month %", "Vol x"]
+S4_WIDTHS  = [110, 24, 24, 30, 30, 30, 33]
 _diff4 = USABLE - sum(S4_WIDTHS)
 S4_WIDTHS[0] += _diff4
-S4_PCT_COLS = {6, 7}
+S4_GRADIENT_COLS = {3, 4, 5}
+
+
+def _fmt_vol_safe(r):
+    v = r.get("vol_ratio")
+    return f"{v:.1f}x" if isinstance(v, (int, float)) else "-"
 
 
 def _s4_rows(data):
-    return [
-        [r.get("company","—"), r.get("ticker","—"), r.get("market_cap","—"),
-         r.get("price","—"), r.get("pe","—"), r.get("has_options","—"),
-         r.get("5d","—"), r.get("1mo","—")]
-        for r in data
-    ]
+    return [[r.get("company", "-"), r.get("symbol", "-"), r.get("price", "-"),
+             r.get("5d", "-"), r.get("1mo", "-"), r.get("3mo", "-"),
+             r.get("vol_disp", _fmt_vol_safe(r))] for r in data]
 
 
 # ── Section 5: Earnings Calendar ─────────────────────────────
@@ -419,11 +421,20 @@ def build_pdf(
         pdf.no_data_notice()
 
     # ── Section 4: Companies of Interest ─────────────────────
-    pdf.section_title("Section 4 - Companies of Interest  (>10% 5-day | >20% 1-month | Volume Spike)")
-    if companies_data:
-        pdf.table(S4_HEADERS, S4_WIDTHS, _s4_rows(companies_data), pct_cols=S4_PCT_COLS)
-    else:
-        pdf.no_data_notice()
+    pdf.section_title("Section 4 - Companies of Interest")
+    buckets = companies_data or {}
+    for sub, title in (("five_day",  ">10% 5-Day Movers"),
+                       ("one_month", ">20% 1-Month Movers"),
+                       ("volume",    "Volume Spikes (>=1.5x avg, >=$2B)")):
+        rows = buckets.get(sub, [])
+        pdf.set_font(FONT_B, "B", 9)
+        pdf.set_text_color(*COLOR_NEUTRAL)
+        pdf.cell(USABLE, 7, _safe(title), align="L")
+        pdf.ln(8)
+        if rows:
+            pdf.table(S4_HEADERS, S4_WIDTHS, _s4_rows(rows), gradient_cols=S4_GRADIENT_COLS)
+        else:
+            pdf.no_data_notice()
 
     # ── Section 5: Earnings Calendar ─────────────────────────
     pdf.section_title("Section 5 - Earnings Calendar  (Source: StockAnalysis.com / Finviz)")
