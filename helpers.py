@@ -79,12 +79,13 @@ def get_et_now():
 
 
 def period_dates():
-    """Return a dict of {period_key: datetime} for the standard comparison periods."""
+    """Return {period_key: datetime} for the standard comparison periods."""
     now = datetime.now()
     return {
         "current": now,
-        "5d":      now - timedelta(days=7),    # 7 calendar days to clear weekends
+        "5d":      now - timedelta(days=7),
         "1mo":     now - timedelta(days=33),
+        "3mo":     now - timedelta(days=92),
         "6mo":     now - timedelta(days=185),
         "1yr":     now - timedelta(days=370),
         "5yr":     now - timedelta(days=1830),
@@ -94,12 +95,31 @@ def period_dates():
 PERIOD_LABELS = {
     "5d":  "5 Day Change",
     "1mo": "1 Month Change",
+    "3mo": "3 Month Change",
     "6mo": "6 Month Change",
     "1yr": "1 Year Change",
     "5yr": "5 Year Change",
 }
 
-PERIODS = ["5d", "1mo", "6mo", "1yr", "5yr"]
+PERIODS = ["5d", "1mo", "3mo", "6mo", "1yr", "5yr"]
+
+
+def pct_change_over(closes, n_sessions):
+    """
+    Percent change of the most recent close vs the close n_sessions trading
+    days earlier. Returns a float, or 'NA' if there isn't enough data.
+    """
+    try:
+        closes = closes.dropna()
+        if len(closes) <= n_sessions:
+            return "NA"
+        current = float(closes.iloc[-1])
+        past    = float(closes.iloc[-1 - n_sessions])
+        if past == 0:
+            return "NA"
+        return round(((current - past) / abs(past)) * 100, 2)
+    except Exception:
+        return "NA"
 
 
 def scraper_headers():
