@@ -1,5 +1,5 @@
 """
-price_history.py — Batch daily OHLCV history via yfinance, cached per day.
+price_history.py — Batch 5y daily OHLCV history via yfinance, cached per day.
 
 One pickle per calendar date under cache/. Downloads in chunks to avoid
 per-ticker loops and rate limits.
@@ -38,7 +38,7 @@ def volumes_for(panel, ticker):
 
 def _download_chunk(tickers):
     df = yf.download(
-        tickers, period="1y", interval="1d", group_by="ticker",
+        tickers, period="5y", interval="1d", group_by="ticker",
         auto_adjust=True, threads=True, progress=False,
     )
     if df.index.tz is not None:
@@ -48,7 +48,9 @@ def _download_chunk(tickers):
 
 def fetch_history(tickers, use_cache=True):
     """
-    Download (or load cached) 1y daily history for the given tickers.
+    Download (or load cached) 5y daily history for the given tickers.
+    5 years of depth is needed for 3yr/5yr period changes (Section 3, Section 6);
+    shorter periods and the 50/200-day MAs are computed from the tail.
     Returns a wide DataFrame with MultiIndex columns (ticker, field).
     """
     os.makedirs(CACHE_DIR, exist_ok=True)
