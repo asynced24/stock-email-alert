@@ -323,7 +323,12 @@ def _cover_page(pdf, report_date):
     pdf.ln(10)
     pdf.set_font(FONT, "I", 10)
     pdf.set_text_color(120, 120, 120)
-    pdf.cell(USABLE, 6, "Recipient: 22mdrw@queensu.ca", align="C")
+    try:
+        from config import EMAIL_RECIPIENT
+        recipient = EMAIL_RECIPIENT or "(not configured)"
+    except Exception:
+        recipient = "(not configured)"
+    pdf.cell(USABLE, 6, _safe(f"Recipient: {recipient}"), align="C")
     pdf.ln(20)
 
     # Table of contents
