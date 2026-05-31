@@ -51,6 +51,32 @@ COLOR_ROW_ALT     = (245, 245, 250)   # alternating row shading
 COLOR_ROW_NORMAL  = (255, 255, 255)
 COLOR_BORDER      = (180, 180, 200)
 
+
+def pct_fill_color(pct, saturate=20.0):
+    """
+    Map a percentage change to a cell background color.
+    0% -> white; positive -> green (darker as magnitude grows);
+    negative -> red (darker as magnitude grows). Saturates at +-`saturate`%.
+    """
+    try:
+        v = float(pct)
+    except (TypeError, ValueError):
+        return (255, 255, 255)
+    frac = max(-1.0, min(1.0, v / saturate))
+    intensity = abs(frac)
+    if frac > 0:   # green: keep G high, drop R and B
+        r = int(255 - 175 * intensity)
+        g = int(255 - 35 * intensity)
+        b = int(255 - 175 * intensity)
+    elif frac < 0:  # red: keep R high, drop G and B
+        r = int(255 - 35 * intensity)
+        g = int(255 - 175 * intensity)
+        b = int(255 - 175 * intensity)
+    else:
+        return (255, 255, 255)
+    return (r, g, b)
+
+
 # ── Page Geometry (A4 landscape) ─────────────────────────────
 PAGE_W  = 297
 PAGE_H  = 210
@@ -91,16 +117,19 @@ class ReportPDF(FPDF):
         self.ln(11)
 
     # ── Table ─────────────────────────────────────────────────
-    def table(self, headers, col_widths, rows, pct_cols=None):
+    def table(self, headers, col_widths, rows, pct_cols=None, gradient_cols=None):
         """
         Render a table.
-        headers:    list of column header strings
-        col_widths: list of mm widths (must sum to ~USABLE)
-        rows:       list of lists (each inner list is a row of cell values)
-        pct_cols:   set of column indices whose values are pct strings (color-coded)
+        headers:       list of column header strings
+        col_widths:    list of mm widths (must sum to ~USABLE)
+        rows:          list of lists (each inner list is a row of cell values)
+        pct_cols:      set of column indices whose values are pct strings (text color-coded)
+        gradient_cols: set of column indices whose cell BACKGROUND is shaded by magnitude
         """
         if pct_cols is None:
             pct_cols = set()
+        if gradient_cols is None:
+            gradient_cols = set()
 
         row_h = 5.2   # mm per row
         hdr_h = 6.0   # header row height
@@ -127,13 +156,19 @@ class ReportPDF(FPDF):
                 self.set_font(FONT, BODY_STYLE, BODY_SIZE)   # reset body font after header
 
             fill_color = COLOR_ROW_ALT if row_idx % 2 == 0 else COLOR_ROW_NORMAL
-            self.set_fill_color(*fill_color)
 
             for col_idx, (val, w) in enumerate(zip(row, col_widths)):
                 val = _safe(val)
 
-                # Color-code percentage cells
-                if col_idx in pct_cols and val != "NA" and val != "—":
+                # Choose fill: gradient overrides alternating shading
+                if col_idx in gradient_cols and val not in ("NA", "-", ""):
+                    self.set_fill_color(*pct_fill_color(
+                        val.replace("%", "").replace("+", "").strip()))
+                else:
+                    self.set_fill_color(*fill_color)
+
+                # Color-code percentage cells (text color)
+                if col_idx in pct_cols and val != "NA" and val != "-":
                     val_clean = val.replace("%", "").replace("+", "").strip()
                     try:
                         num = float(val_clean)
