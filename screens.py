@@ -73,13 +73,13 @@ def abnormal_volume(universe_df, panel, min_cap, mult=1.5):
 def momentum_pullback(universe_df, panel, min_cap):
     """Up >50% over the year AND down >10% over week, month, or 3-month.
 
-    Uses all available history (up to 252 sessions) for the year-over-year
-    change so the screen works even when the panel is shorter than a full year.
+    Requires ~10 months (200 sessions) of history for the yearly trend to be
+    meaningful. Measures the yearly change over up to 252 sessions.
     """
     out = []
     for symbol in _cap_filtered(universe_df, min_cap)["symbol"]:
         closes = closes_for(panel, symbol)
-        if closes is None or len(closes) < 6:   # need at least 5d lookback + 1
+        if closes is None or len(closes) < 200:   # need ~10mo of history for a yearly trend
             continue
         yr_sessions = min(SESS["1yr"], len(closes) - 1)
         yr = pct_change_over(closes, yr_sessions)
@@ -94,13 +94,13 @@ def momentum_pullback(universe_df, panel, min_cap):
 def reversal_bounce(universe_df, panel, min_cap):
     """Down >15% over the year AND up >5% over the week.
 
-    Uses all available history (up to 252 sessions) for the year-over-year
-    change so the screen works even when the panel is shorter than a full year.
+    Requires ~10 months (200 sessions) of history for the yearly trend to be
+    meaningful. Measures the yearly change over up to 252 sessions.
     """
     out = []
     for symbol in _cap_filtered(universe_df, min_cap)["symbol"]:
         closes = closes_for(panel, symbol)
-        if closes is None or len(closes) < 6:   # need at least 5d lookback + 1
+        if closes is None or len(closes) < 200:   # need ~10mo of history for a yearly trend
             continue
         yr_sessions = min(SESS["1yr"], len(closes) - 1)
         yr = pct_change_over(closes, yr_sessions)
