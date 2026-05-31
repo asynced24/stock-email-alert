@@ -1,0 +1,10 @@
+# Past trading mistakes — one ticker per line. Add a note after a space if you like.
+CAR
+UNH
+FVI
+TNZ
+BTE
+MDA
+AEO
+LULU
+GOOG

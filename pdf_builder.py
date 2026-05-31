@@ -321,6 +321,47 @@ def _cover_page(pdf, report_date):
         pdf.ln(7)
 
 
+# ── Strategy / Discipline Page ───────────────────────────────
+
+def _strategy_page(pdf, mantra, mantra_defs, mistakes):
+    pdf.add_page()
+    pdf.set_font(FONT_B, "B", 18)
+    pdf.set_text_color(*COLOR_SEC_TITLE)
+    pdf.cell(USABLE, 12, "Trading Discipline", align="C")
+    pdf.ln(16)
+
+    # Mantra
+    pdf.set_font(FONT_B, "B", 13)
+    pdf.set_text_color(*COLOR_NEUTRAL)
+    pdf.cell(USABLE, 8, "Mantra", align="L")
+    pdf.ln(9)
+    pdf.set_font(FONT_B, "B", 12)
+    pdf.cell(USABLE, 8, _safe("  ->  ".join(mantra)), align="L")
+    pdf.ln(12)
+
+    # Definitions (bold label, wrapped description)
+    for step, desc in mantra_defs:
+        pdf.set_font(FONT_B, "B", 10)
+        pdf.cell(28, 6, _safe(f"  {step}:"), align="L")
+        pdf.set_font(FONT, "", 10)
+        pdf.multi_cell(USABLE - 28, 6, _safe(desc), align="L")
+    pdf.ln(8)
+
+    # Past mistakes
+    pdf.set_font(FONT_B, "B", 13)
+    pdf.set_text_color(*COLOR_NEUTRAL)
+    pdf.cell(USABLE, 8, "Past Mistakes", align="L")
+    pdf.ln(9)
+    pdf.set_font(FONT, "", 11)
+    if mistakes:
+        for m in mistakes:
+            pdf.cell(USABLE, 7, _safe(f"  - {m}"), align="L")
+            pdf.ln(7)
+    else:
+        pdf.cell(USABLE, 7, "  (none recorded)", align="L")
+        pdf.ln(7)
+
+
 # ── Main Build Function ───────────────────────────────────────
 
 def build_pdf(
@@ -352,6 +393,10 @@ def build_pdf(
 
     # ── Cover ─────────────────────────────────────────────────
     _cover_page(pdf, report_date)
+
+    # ── Strategy / Discipline Page ────────────────────────────
+    from config import MANTRA, MANTRA_DEFS, load_mistakes
+    _strategy_page(pdf, MANTRA, MANTRA_DEFS, load_mistakes())
 
     # ── Section 1: FRED Macro ─────────────────────────────────
     pdf.section_title("Section 1 - Macro Data  (Source: FRED API)")

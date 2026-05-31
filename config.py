@@ -112,3 +112,26 @@ COMMODITY_TICKERS = {
     "BDRY":     ("Breakwave Dry Bulk ETF (Shipping)",  "USD per Share"),
     "ZIM":      ("ZIM Integrated Shipping",          "USD per Share"),
 }
+
+# ── Trading Discipline ────────────────────────────────────────
+MANTRA = ["Filter", "Assess", "Risk", "Position", "Entrance", "Exit"]
+
+MANTRA_DEFS = [
+    ("Filter",   "Use this program to filter for macro trends, industry, company specific."),
+    ("Assess",   "What? Why? Who? Where? When? Intrinsic Value."),
+    ("Position", "Risk assessment, type of trade, expected returns. Plan for escape if things turn bad."),
+    ("Entrance", "Capital allocation, what is the best deal? DCA or full? Hold period."),
+    ("Exit",     "When to exit. What return would I be satisfied with?"),
+]
+
+MISTAKES_FILE = "mistakes.txt"
+
+
+def load_mistakes(path=MISTAKES_FILE):
+    """Read non-comment, non-empty lines from the mistakes file (each a ticker, optional note)."""
+    try:
+        with open(path, encoding="utf-8") as f:
+            return [ln.strip() for ln in f
+                    if ln.strip() and not ln.strip().startswith("#")]
+    except FileNotFoundError:
+        return []
