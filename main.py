@@ -31,14 +31,25 @@ from pdf_builder         import build_pdf
 from email_sender        import send_report
 
 
-def _make_options_checker():
-    """Return a sym->bool checker for option availability (best-effort via yfinance)."""
+def _make_options_checker(pace=0.25, retries=3):
+    """
+    Return a sym->bool checker for option availability via yfinance.
+
+    The options endpoint rate-limits when called in a burst right after the bulk
+    history download (this previously emptied Section 6). We pace each call and
+    retry on an empty/failed response so a transient rate-limit doesn't wrongly
+    exclude an optionable stock.
+    """
     import yfinance as yf
     def has_options(sym):
-        try:
-            return bool(yf.Ticker(sym).options)
-        except Exception:
-            return False
+        for _ in range(retries):
+            time.sleep(pace)
+            try:
+                if yf.Ticker(sym).options:
+                    return True
+            except Exception:
+                pass
+        return False
     return has_options
 
 
@@ -143,11 +154,14 @@ def generate_and_send(send_email: bool = True):
         earnings_data = []
 
     # ── Sections 6-9: Screens ────────────────────────────────
-    section6 = section7 = section8 = section9 = []
+    from config import MIN_CAP_NEAR_MA
+    section6 = section7 = section8 = []
+    section9_50 = section9_200 = []
     if have_market:
         try:
             section6 = screens.long_term_pullback(universe_df, panel, MIN_CAP_SCREENS,
                                                   has_options=_make_options_checker())
+            print(f"[Section 6] {len(section6)} long-term pullback (optionable) candidates.")
         except Exception:
             print("[Section 6] FAILURE:"); traceback.print_exc()
         try:
@@ -159,7 +173,9 @@ def generate_and_send(send_email: bool = True):
         except Exception:
             print("[Section 8] FAILURE:"); traceback.print_exc()
         try:
-            section9 = screens.near_ma(universe_df, panel, MIN_CAP_SCREENS)
+            section9_50  = screens.near_ma(universe_df, panel, MIN_CAP_NEAR_MA, window=50)
+            section9_200 = screens.near_ma(universe_df, panel, MIN_CAP_NEAR_MA, window=200)
+            print(f"[Section 9] {len(section9_50)} near 50d, {len(section9_200)} near 200d.")
         except Exception:
             print("[Section 9] FAILURE:"); traceback.print_exc()
 
@@ -174,7 +190,8 @@ def generate_and_send(send_email: bool = True):
             section6_data=section6,
             section7_data=section7,
             section8_data=section8,
-            section9_data=section9,
+            section9_50_data=section9_50,
+            section9_200_data=section9_200,
             output_path=REPORT_OUTPUT_PATH,
         )
     except Exception:

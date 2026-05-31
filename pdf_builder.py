@@ -251,24 +251,44 @@ def _s3_rows(data):
             for r in data]
 
 
-# ── Section 4: Companies of Interest ─────────────────────────
+# ── Section 4: Companies of Interest (three separate tables) ──
 
-S4_HEADERS = ["Company", "Ticker", "Price", "5 Day %", "1 Month %", "3 Month %", "Vol x"]
-S4_WIDTHS  = [110, 24, 24, 30, 30, 30, 33]
-_diff4 = USABLE - sum(S4_WIDTHS)
-S4_WIDTHS[0] += _diff4
-S4_GRADIENT_COLS = {3, 4, 5}
+# 4a. >10% 5-Day Movers
+S4_MOVERS5_HEADERS  = ["Company", "Ticker", "Price", "5 Day %", "1 Month %", "3 Month %"]
+S4_MOVERS5_WIDTHS   = [125, 26, 28, 34, 34, 34]
+S4_MOVERS5_WIDTHS[0] += USABLE - sum(S4_MOVERS5_WIDTHS)
+S4_MOVERS5_GRADIENT = {3, 4, 5}
+
+# 4b. >20% 1-Month Movers (adds 6-month + 1-year context)
+S4_MOVERS1_HEADERS  = ["Company", "Ticker", "Price", "5 Day %", "1 Month %",
+                       "3 Month %", "6 Month %", "1 Year %"]
+S4_MOVERS1_WIDTHS   = [95, 22, 24, 28, 28, 28, 28, 28]
+S4_MOVERS1_WIDTHS[0] += USABLE - sum(S4_MOVERS1_WIDTHS)
+S4_MOVERS1_GRADIENT = {3, 4, 5, 6, 7}
+
+# 4c. Volume Spikes
+S4_VOL_HEADERS  = ["Company", "Ticker", "Price", "5 Day %", "Avg Vol (2wk)",
+                   "Top Spike (3d)", "Peak Vol (3d)", "Peak Date"]
+S4_VOL_WIDTHS   = [86, 22, 24, 28, 34, 30, 30, 29]
+S4_VOL_WIDTHS[0] += USABLE - sum(S4_VOL_WIDTHS)
+S4_VOL_GRADIENT = {3}   # only the 5-day % is a gradient column
 
 
-def _fmt_vol_safe(r):
-    v = r.get("vol_ratio")
-    return f"{v:.1f}x" if isinstance(v, (int, float)) else "-"
+def _s4_movers5_rows(data):
+    return [[r.get("company", "-"), r.get("symbol", "-"), r.get("price", "-"),
+             r.get("5d", "-"), r.get("1mo", "-"), r.get("3mo", "-")] for r in data]
 
 
-def _s4_rows(data):
+def _s4_movers1_rows(data):
     return [[r.get("company", "-"), r.get("symbol", "-"), r.get("price", "-"),
              r.get("5d", "-"), r.get("1mo", "-"), r.get("3mo", "-"),
-             r.get("vol_disp", _fmt_vol_safe(r))] for r in data]
+             r.get("6mo", "-"), r.get("1yr", "-")] for r in data]
+
+
+def _s4_vol_rows(data):
+    return [[r.get("company", "-"), r.get("symbol", "-"), r.get("price", "-"),
+             r.get("5d", "-"), r.get("avg2wk_disp", "-"), r.get("spike_disp", "-"),
+             r.get("peakvol_disp", "-"), r.get("peak_date", "-")] for r in data]
 
 
 # ── Section 5: Earnings Calendar ─────────────────────────────
@@ -308,6 +328,40 @@ def _screen_section(pdf, title, rows):
         pdf.no_data_notice()
 
 
+def _explainer(pdf, text):
+    """Render a short italic explanation line under a section banner."""
+    pdf.set_font(FONT, "I", 8)
+    pdf.set_text_color(90, 90, 90)
+    pdf.multi_cell(USABLE, 4.5, _safe(text), align="L")
+    pdf.ln(2)
+
+
+# ── Section 9: Near Moving Average (50-day and 200-day tables) ─
+
+def _s9_headers(window):
+    return ["Company", "Ticker", "Price", f"{window}-Day MA",
+            "5 Day %", "1 Month %", "3 Month %", "1 Year %"]
+
+S9_WIDTHS = [100, 22, 24, 28, 26, 26, 26, 29]
+S9_WIDTHS[0] += USABLE - sum(S9_WIDTHS)
+S9_GRADIENT = {4, 5, 6, 7}
+
+
+def _s9_rows(data):
+    return [[r.get("company", "-"), r.get("symbol", "-"), r.get("price", "-"),
+             r.get("ma", "-"), r.get("5d", "-"), r.get("1mo", "-"),
+             r.get("3mo", "-"), r.get("1yr", "-")] for r in data]
+
+
+def _near_ma_section(pdf, title, window, rows):
+    pdf.section_title(title)
+    if rows:
+        pdf.table(_s9_headers(window), S9_WIDTHS, _s9_rows(rows),
+                  gradient_cols=S9_GRADIENT)
+    else:
+        pdf.no_data_notice()
+
+
 # ── Cover Page ────────────────────────────────────────────────
 
 def _cover_page(pdf, report_date):
@@ -339,12 +393,12 @@ def _cover_page(pdf, report_date):
         "Section 1 - Macro Data (FRED + indices)",
         "Section 2 - Base Materials & Commodities (Yahoo Finance)",
         "Section 3 - Industries (StockAnalysis universe, member-averaged)",
-        "Section 4 - Companies of Interest (3 tables)",
+        "Section 4 - Companies of Interest (5-day / 1-month / volume)",
         "Section 5 - Earnings Calendar (>=$5B, next 5 days)",
         "Section 6 - Long-Term Winners Pulling Back",
         "Section 7 - Uptrend Pullback",
         "Section 8 - Downtrend Bounce",
-        "Section 9 - Near 50/200-Day Moving Average",
+        "Section 9 - Near 50-Day & 200-Day Moving Average",
     ]
     for entry in toc:
         pdf.cell(USABLE, 7, _safe(f"   {entry}"), align="L")
@@ -403,7 +457,8 @@ def build_pdf(
     section6_data=None,
     section7_data=None,
     section8_data=None,
-    section9_data=None,
+    section9_50_data=None,
+    section9_200_data=None,
     output_path="stock_report.pdf",
 ):
     """
@@ -458,21 +513,41 @@ def build_pdf(
     else:
         pdf.no_data_notice()
 
-    # ── Section 4: Companies of Interest ─────────────────────
-    pdf.section_title("Section 4 - Companies of Interest")
+    # ── Section 4: Companies of Interest (three blue-bannered tables) ─
     buckets = companies_data or {}
-    for sub, title in (("five_day",  ">10% 5-Day Movers"),
-                       ("one_month", ">20% 1-Month Movers"),
-                       ("volume",    "Volume Spikes (>=1.5x avg, >=$2B)")):
-        rows = buckets.get(sub, [])
-        pdf.set_font(FONT_B, "B", 9)
-        pdf.set_text_color(*COLOR_NEUTRAL)
-        pdf.cell(USABLE, 7, _safe(title), align="L")
-        pdf.ln(8)
-        if rows:
-            pdf.table(S4_HEADERS, S4_WIDTHS, _s4_rows(rows), gradient_cols=S4_GRADIENT_COLS)
-        else:
-            pdf.no_data_notice()
+
+    # 4a. >10% 5-Day Movers
+    pdf.section_title("Section 4 - Companies of Interest:  >10% 5-Day Movers")
+    five = buckets.get("five_day", [])
+    if five:
+        pdf.table(S4_MOVERS5_HEADERS, S4_MOVERS5_WIDTHS, _s4_movers5_rows(five),
+                  gradient_cols=S4_MOVERS5_GRADIENT)
+    else:
+        pdf.no_data_notice()
+
+    # 4b. >20% 1-Month Movers
+    pdf.section_title("Companies of Interest:  >20% 1-Month Movers")
+    month = buckets.get("one_month", [])
+    if month:
+        pdf.table(S4_MOVERS1_HEADERS, S4_MOVERS1_WIDTHS, _s4_movers1_rows(month),
+                  gradient_cols=S4_MOVERS1_GRADIENT)
+    else:
+        pdf.no_data_notice()
+
+    # 4c. Volume Spikes
+    pdf.section_title("Companies of Interest:  Volume Spikes")
+    _explainer(pdf,
+        "Volume spike = the single highest daily trading volume over the last 3 trading days "
+        "is at least 2x the average daily volume of the prior 2 weeks (10 trading days). "
+        "Only companies with a market cap of $2B or more are included. "
+        "'Avg Vol (2wk)' is that 2-week average; 'Top Spike (3d)' is the peak/average ratio; "
+        "'Peak Vol (3d)' is the highest single-day volume and 'Peak Date' is the day it occurred.")
+    vol = buckets.get("volume", [])
+    if vol:
+        pdf.table(S4_VOL_HEADERS, S4_VOL_WIDTHS, _s4_vol_rows(vol),
+                  gradient_cols=S4_VOL_GRADIENT)
+    else:
+        pdf.no_data_notice()
 
     # ── Section 5: Earnings Calendar ─────────────────────────
     pdf.section_title("Section 5 - Earnings Calendar  (Source: StockAnalysis.com / Finviz)")
@@ -496,10 +571,13 @@ def build_pdf(
                     "Section 8 - Downtrend Bounce  (down >20% 1yr, up >10% over 5d/1mo)",
                     section8_data or [])
 
-    # -- Section 9: Near 50/200-Day Moving Average
-    _screen_section(pdf,
-                    "Section 9 - Near 50/200-Day Moving Average  (within 5%, >=B)",
-                    section9_data or [])
+    # -- Section 9: Near Moving Average (two tables: 50-day, then 200-day)
+    _near_ma_section(pdf,
+                     "Section 9 - Near 50-Day Moving Average  (within 5%, >=$5B)",
+                     50, section9_50_data or [])
+    _near_ma_section(pdf,
+                     "Section 9 - Near 200-Day Moving Average  (within 5%, >=$5B)",
+                     200, section9_200_data or [])
 
     pdf.output(output_path)
     print(f"[PDF] Saved to: {output_path}")

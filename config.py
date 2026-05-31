@@ -126,8 +126,9 @@ COMMODITY_TICKERS = {
 }
 
 # ── Screen / Earnings Market-Cap Thresholds ──────────────────
-MIN_CAP_SCREENS  = 2e9   # $2B — used by Sections 4, 6, 7, 8, 9
+MIN_CAP_SCREENS  = 2e9   # $2B — used by Sections 4, 6, 7, 8
 MIN_CAP_EARNINGS = 5e9   # $5B — used by Section 5 earnings filter
+MIN_CAP_NEAR_MA  = 5e9   # $5B — used by Section 9 (near 50/200-day MA tables)
 
 # ── Trading Discipline ────────────────────────────────────────
 MANTRA = ["Filter", "Assess", "Risk", "Position", "Entrance", "Exit"]

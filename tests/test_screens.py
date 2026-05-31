@@ -17,16 +17,23 @@ def _panel_from(series_by_ticker):
 
 
 def test_near_ma_flags_price_within_5pct(sample_universe):
-    # AAA: 210 closes flat at 100 -> 50d & 200d MA == 100, price 100 -> within 5%
+    # AAA: 210 closes flat at 100 -> 50d MA == 100, price 100 -> within 5%
     panel = _panel_from({"AAA": ([100.0] * 210, [1] * 210)})
-    rows = screens.near_ma(sample_universe, panel, min_cap=2e9, pct=5.0)
+    rows = screens.near_ma(sample_universe, panel, min_cap=2e9, window=50, pct=5.0)
+    assert any(r["symbol"] == "AAA" for r in rows)
+    assert rows[0]["ma"] == "100.00"   # MA value reported
+
+
+def test_near_ma_200_window(sample_universe):
+    panel = _panel_from({"AAA": ([100.0] * 210, [1] * 210)})
+    rows = screens.near_ma(sample_universe, panel, min_cap=2e9, window=200, pct=5.0)
     assert any(r["symbol"] == "AAA" for r in rows)
 
 
 def test_near_ma_excludes_small_cap(sample_universe):
     # CCC market cap is 1e9 < 2e9 floor; even if near MA it must be excluded
     panel = _panel_from({"CCC": ([10.0] * 210, [1] * 210)})
-    rows = screens.near_ma(sample_universe, panel, min_cap=2e9, pct=5.0)
+    rows = screens.near_ma(sample_universe, panel, min_cap=2e9, window=50, pct=5.0)
     assert all(r["symbol"] != "CCC" for r in rows)
 
 

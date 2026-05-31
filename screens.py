@@ -34,21 +34,21 @@ def _base_row(universe_df, symbol, closes):
     }
 
 
-def near_ma(universe_df, panel, min_cap, pct=5.0):
-    """Stocks whose latest price is within `pct`% of their 50- or 200-day MA."""
+def near_ma(universe_df, panel, min_cap, window, pct=5.0):
+    """
+    Stocks whose latest price is within `pct`% of their `window`-day moving
+    average (window is 50 or 200). Each row carries 'ma' = the MA value.
+    """
     out = []
     for symbol in _cap_filtered(universe_df, min_cap)["symbol"]:
         closes = closes_for(panel, symbol)
-        if closes is None or len(closes) < 50:
+        if closes is None or len(closes) < window:
             continue
         price = float(closes.iloc[-1])
-        ma50  = float(closes.tail(50).mean())
-        ma200 = float(closes.tail(200).mean()) if len(closes) >= 200 else None
-        near50  = abs(price - ma50) / ma50 * 100 <= pct
-        near200 = ma200 is not None and abs(price - ma200) / ma200 * 100 <= pct
-        if near50 or near200:
+        ma = float(closes.tail(window).mean())
+        if ma > 0 and abs(price - ma) / ma * 100 <= pct:
             row = _base_row(universe_df, symbol, closes)
-            row["ma_tag"] = "50D" if near50 else "200D"
+            row["ma"] = f"{ma:.2f}"
             out.append(row)
     return out
 
