@@ -10,6 +10,17 @@
 
 **Spec:** `docs/superpowers/specs/2026-05-30-stock-report-v1-design.md`
 
+> **REVISION v1.1 (2026-05-30):** Aryan updated requirements mid-execution. See **§12** of the
+> spec for authoritative overrides. Key deltas vs the task text below:
+> - History depth `period='1y'` → **`period='5y'`** (Task 1.2).
+> - Body font: regular → **bold** everywhere (Task 3.1).
+> - Screens (Task 2.1 / 4.6): add **S6** (>0% 5yr AND >20% 1yr AND <-10% 3mo AND optionable);
+>   **S8** thresholds → down>20%/yr AND up>10% (5d/1mo); S7 (momentum_pullback) & S9 (near_ma) unchanged.
+> - Section 3 (Task 4.3): industry list from universe; **PE + 5d/1mo/3mo/6mo/1yr/3yr/5yr** via
+>   cap-weighted member-averaging from yfinance (not ETF proxies, not direct industry scrape).
+> - Past Mistakes: **CAR, UNH, FVI, TNZ, BTE, MDA, AEO, LULU, GOOG**; Mantra gains per-step definitions.
+> - Gradient shading on all relevant tables.
+
 ---
 
 ## File Structure

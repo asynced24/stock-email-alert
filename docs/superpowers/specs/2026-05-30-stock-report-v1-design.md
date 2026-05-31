@@ -2,8 +2,69 @@
 
 **Date:** 2026-05-30
 **Author:** Aryan (brainstormed with Claude)
-**Status:** Approved for planning
+**Status:** Approved for planning — see **§12 Revision v1.1** for the authoritative current requirements (overrides earlier sections where they differ)
 **Repo:** `stock_report/`
+
+---
+
+## 12. Revision v1.1 (2026-05-30) — authoritative overrides
+
+Aryan supplied an updated, more detailed change list mid-execution. Where this section
+conflicts with §1–§11 above, **this section wins**.
+
+### Header page
+- Mantra: **Filter · Assess · Risk · Position · Entrance · Exit**, each with a definition:
+  - **Filter:** Use this program to filter for macro trends, industry, company specific.
+  - **Assess:** What? Why? Who? Where? When? Intrinsic Value.
+  - **Position:** Risk assessment, type of trade, expected returns. Plan for escape if things turn bad.
+  - **Entrance:** Capital allocation, what is the best deal? DCA or full? Hold period.
+  - **Exit:** When to exit. What return would I be satisfied with?
+- Past Mistakes (tickers): **CAR, UNH, FVI, TNZ, BTE, MDA, AEO, LULU, GOOG** (replaces the earlier 6).
+
+### Global styling
+- **All table body text is BOLD** (every section). Earlier "font fix" = make body bold AND
+  consistent across page breaks. Headers stay bold.
+- **Gradient red/green cell shading** on all relevant percentage tables (S4, S6, S7, S8, S9;
+  and the pct columns of S1/S2/S3 where useful).
+
+### Section 1 / Section 2
+- Unchanged from §6 except: bold body text (above). S1 index rows + 3mo; S2 + 3mo.
+
+### Section 3 — Industries (new method)
+- Industry list = unique `industry` values from the universe snapshot (StockAnalysis-derived).
+- For each industry compute, by **market-cap-weighted average of its member stocks'** yfinance
+  history: **5d, 1mo, 3mo, 6mo, 1yr, 3yr, 5yr** percent changes.
+- **PE** column = **median** member P/E (from the universe snapshot peRatio; ignore <=0).
+- Columns: `Industry | PE | 5d | 1mo | 3mo | 6mo | 1yr | 3yr | 5yr`.
+- Members are drawn from the >=$2B history panel already fetched (large-cap-biased but free;
+  acceptable). Degrade gracefully if the universe is unavailable.
+
+### Section 4 — three tables (unchanged intent, one tweak)
+- Table 3 (volume spikes) carries a **>=$2B market-cap floor**.
+
+### Section 5 — unchanged from §6 (bold via global styling).
+
+### Screens — new/changed definitions
+Numbering in the report:
+- **S6 (new) — Long-term winners pulling back, optionable:**
+  change **> 0% over 5yr** AND **> 20% over 1yr** AND **< -10% over 3mo** AND **has options**.
+- **S7 — Uptrend pullback:** up **> 50% over 1yr** AND down **> 10%** over 5d **or** 1mo **or** 3mo.
+  (= existing `momentum_pullback`, unchanged.)
+- **S8 — Downtrend bounce:** down **> 20% over 1yr** AND up **> 10%** over 5d **or** 1mo.
+  (Revises existing `reversal_bounce` thresholds: was 15%/5%-week → now 20%/10%-week-or-month.)
+- **S9 — Near moving average:** within **5%** of 50- or 200-day MA, market cap **>= $2B**.
+  (= existing `near_ma`, unchanged.)
+
+### Cascading infrastructure changes
+- **`price_history.fetch_history` depth: `period='1y'` → `period='5y'`** (S3 3yr/5yr, S6 5yr need it).
+  Offline tests unaffected. MAs and short periods still computed from the tail.
+- Add a **3yr** session offset (`756`) and **5yr** (`1260`) where industry/screen math needs it.
+- **Options check** for S6: after the price filters select a small candidate set, check
+  `yfinance.Ticker(sym).options` truthiness on the survivors only (cheap).
+
+### Reliability instruction from Aryan
+- For Sections 3, 4, and the MA screen: **alert Aryan** (don't silently degrade) if the
+  underlying scrape/data source breaks in a way that empties the section.
 
 ---
 
