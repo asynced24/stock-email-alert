@@ -236,18 +236,19 @@ def _s2_rows(data):
 
 # ── Section 3: Industries ─────────────────────────────────────
 
-S3_HEADERS = ["Industry", "Market Cap", "5 Day %", "1 Month %", "6 Month %", "1 Year %", "5 Year %"]
-S3_WIDTHS  = [98, 32, 25, 25, 25, 25, 25]
+S3_HEADERS = ["Industry", "P/E", "5 Day %", "1 Month %", "3 Month %",
+              "6 Month %", "1 Year %", "3 Year %", "5 Year %"]
+S3_WIDTHS  = [89, 20, 24, 24, 24, 24, 24, 24, 24]
 _diff3 = USABLE - sum(S3_WIDTHS)
 S3_WIDTHS[0] += _diff3
+S3_GRADIENT_COLS = {2, 3, 4, 5, 6, 7, 8}   # the 7 period columns
 
 
 def _s3_rows(data):
-    return [
-        [r.get("industry","—"), r.get("market_cap","—"), r.get("5d","—"),
-         r.get("1mo","—"), r.get("6mo","—"), r.get("1yr","—"), r.get("5yr","—")]
-        for r in data
-    ]
+    return [[r.get("industry", "-"), r.get("pe", "-"), r.get("5d", "-"),
+             r.get("1mo", "-"), r.get("3mo", "-"), r.get("6mo", "-"),
+             r.get("1yr", "-"), r.get("3yr", "-"), r.get("5yr", "-")]
+            for r in data]
 
 
 # ── Section 4: Companies of Interest ─────────────────────────
@@ -410,9 +411,10 @@ def build_pdf(
         pdf.no_data_notice()
 
     # ── Section 3: Industries ─────────────────────────────────
-    pdf.section_title("Section 3 - Industries  (Source: Finviz)")
+    pdf.section_title("Section 3 - Industries  (Source: StockAnalysis universe (member-averaged))")
     if industries_data:
-        pdf.table(S3_HEADERS, S3_WIDTHS, _s3_rows(industries_data), pct_cols=_std_pct_cols())
+        pdf.table(S3_HEADERS, S3_WIDTHS, _s3_rows(industries_data),
+                  gradient_cols=S3_GRADIENT_COLS)
     else:
         pdf.no_data_notice()
 
