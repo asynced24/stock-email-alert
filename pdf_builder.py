@@ -273,19 +273,15 @@ def _s4_rows(data):
 
 # ── Section 5: Earnings Calendar ─────────────────────────────
 
-S5_HEADERS = ["Date", "Ticker", "Company", "Time", "EPS Est.", "EPS Actual", "Rev. Est.", "Rev. Actual", "Mkt Cap"]
-S5_WIDTHS  = [22, 16, 68, 14, 20, 20, 24, 24, 25]
+S5_HEADERS = ["Date", "Ticker", "Company", "Time", "Mkt Cap"]
+S5_WIDTHS  = [40, 26, 150, 35, 30]
 _diff5 = USABLE - sum(S5_WIDTHS)
 S5_WIDTHS[2] += _diff5
 
 
 def _s5_rows(data):
-    return [
-        [r.get("date","—"), r.get("symbol","—"), r.get("company","—"),
-         r.get("time","—"), r.get("eps_est","—"), r.get("eps_actual","—"),
-         r.get("revenue_est","—"), r.get("revenue_act","—"), r.get("market_cap","—")]
-        for r in data
-    ]
+    return [[r.get("date", "-"), r.get("symbol", "-"), r.get("company", "-"),
+             r.get("time", "-"), r.get("market_cap", "-")] for r in data]
 
 
 # ── Cover Page ────────────────────────────────────────────────

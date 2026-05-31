@@ -8,10 +8,28 @@ Returns a list of row dicts for the PDF table.
 """
 import json
 
+import pandas as pd
 import requests
 from bs4 import BeautifulSoup
 
 from helpers import scraper_headers
+
+
+def filter_by_market_cap_5b(rows, universe_df, min_cap=5e9):
+    """
+    Keep only earnings rows whose symbol maps to a universe market cap >= min_cap.
+    If universe_df is None/empty, return rows unchanged (caller decides how to handle).
+    """
+    if universe_df is None or getattr(universe_df, "empty", False):
+        return rows
+    cap_map = dict(zip(universe_df["symbol"],
+                       pd.to_numeric(universe_df["market_cap"], errors="coerce")))
+    out = []
+    for r in rows:
+        cap = cap_map.get(r.get("symbol"))
+        if cap is not None and pd.notna(cap) and cap >= min_cap:
+            out.append(r)
+    return out
 
 # Nasdaq has a clean earnings calendar page
 NASDAQ_EARNINGS_URL   = "https://www.nasdaq.com/market-activity/earnings"
@@ -136,12 +154,14 @@ def _norm(r):
     }
 
 
-def fetch_earnings_data():
+def fetch_earnings_data(universe_df=None):
     """
     Fetch earnings calendar from multiple sources.
     Returns: list of dicts with keys:
-        date, symbol, company, time, eps_est, eps_actual,
-        revenue_est, revenue_act, market_cap
+        date, symbol, company, time, market_cap
+
+    universe_df: optional DataFrame with 'symbol' and 'market_cap' columns.
+                 When provided, only rows with market_cap >= $5B are returned.
     """
     print("[Section 5] Fetching earnings calendar...")
 
@@ -149,14 +169,14 @@ def fetch_earnings_data():
     rows = _try_nasdaq_api()
     if rows:
         print(f"[Section 5] Got {len(rows)} entries from Nasdaq API.")
-        return rows
+        return filter_by_market_cap_5b(rows, universe_df)
 
     # Try StockAnalysis
     print("  [INFO] Trying StockAnalysis earnings...")
     rows = _try_stockanalysis()
     if rows:
         print(f"[Section 5] Got {len(rows)} entries from StockAnalysis.")
-        return rows
+        return filter_by_market_cap_5b(rows, universe_df)
 
     print("  [WARN] No earnings data available. Section 5 will show empty table.")
     return []
