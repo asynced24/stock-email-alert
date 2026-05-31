@@ -382,7 +382,30 @@ def _cover_page(pdf, report_date):
     except Exception:
         recipient = "(not configured)"
     pdf.cell(USABLE, 6, _safe(f"Recipient: {recipient}"), align="C")
-    pdf.ln(20)
+    pdf.ln(18)
+
+    # ── Sound Options Trading Mantra (front and center, under the title) ──
+    from config import MANTRA, load_mistakes
+    pdf.set_font(FONT_B, "B", 14)
+    pdf.set_text_color(*COLOR_SEC_TITLE)
+    pdf.cell(USABLE, 8, "Sound Options Trading Mantra", align="C")
+    pdf.ln(10)
+    pdf.set_font(FONT_B, "B", 12)
+    pdf.set_text_color(*COLOR_NEUTRAL)
+    pdf.cell(USABLE, 8, _safe("  ->  ".join(MANTRA)), align="C")
+    pdf.ln(13)
+
+    # Past mistakes, listed under the mantra
+    pdf.set_font(FONT_B, "B", 12)
+    pdf.set_text_color(*COLOR_SEC_TITLE)
+    pdf.cell(USABLE, 7, "Past Mistakes", align="C")
+    pdf.ln(8)
+    pdf.set_font(FONT, "", 11)
+    pdf.set_text_color(120, 120, 120)
+    _mistakes = load_mistakes()
+    _mline = ",   ".join(_mistakes) if _mistakes else "(none recorded)"
+    pdf.multi_cell(USABLE, 6, _safe(_mline), align="C")
+    pdf.ln(18)
 
     # Table of contents
     pdf.set_font(FONT_B, "B", 11)
