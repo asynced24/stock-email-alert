@@ -26,3 +26,21 @@ def test_filter_by_market_cap():
     df = parse_universe_html(SAMPLE)
     big = filter_by_market_cap(df, 2e9)
     assert set(big["symbol"]) == {"NVDA", "AAPL"}   # TINY (0.9B) dropped
+
+
+def test_parse_universe_preserves_punctuation_in_names():
+    sample = (
+        '{type:"data",data:{count:2,data:['
+        '{s:"AAA",n:"Foo, Bar: Inc",marketCap:5000000000,price:10.0,change:-.5,'
+        'industry:"Software",volume:100,peRatio:11.0},'
+        '{s:"BBB",n:"Plain Co",marketCap:3000000000,price:20.0,change:.25,'
+        'industry:"Banks",volume:200,peRatio:12.0}'
+        ']}}'
+    )
+    df = parse_universe_html(sample)
+    assert list(df["symbol"]) == ["AAA", "BBB"]
+    # comma+word+colon inside the name must survive intact
+    assert df.loc[df.symbol == "AAA", "name"].iloc[0] == "Foo, Bar: Inc"
+    # leading-dot numbers still parse
+    assert round(float(df.loc[df.symbol == "AAA", "change"].iloc[0]), 2) == -0.5
+    assert round(float(df.loc[df.symbol == "BBB", "change"].iloc[0]), 2) == 0.25

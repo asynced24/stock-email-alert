@@ -47,12 +47,54 @@ def _extract_array_text(html):
 
 
 def _js_array_to_json(arr_text):
-    """Convert a JS object array to JSON text."""
-    # Quote unquoted object keys:  {s:  ,n:  -> {"s": ,"n":
-    txt = re.sub(r'([{,])\s*([A-Za-z_][A-Za-z0-9_]*)\s*:', r'\1"\2":', arr_text)
-    # Fix leading-dot numbers:  :.5 -> :0.5  and  :-.5 -> :-0.5
-    txt = re.sub(r':(-?)\.(\d)', r':\g<1>0.\2', txt)
-    return txt
+    """Convert a JS object array to JSON text.
+
+    Splits the input into alternating non-string / double-quoted-string segments
+    (honouring backslash escapes), applies both transforms ONLY to non-string
+    segments, then rejoins.  Quoted string contents are passed through untouched
+    so that company names containing commas, colons, etc. are never corrupted.
+    """
+    # --- split into segments: even indices = outside strings, odd = inside ---
+    segments = []
+    current = []
+    i = 0
+    in_str = False
+    while i < len(arr_text):
+        c = arr_text[i]
+        if not in_str:
+            if c == '"':
+                # flush the current non-string segment
+                segments.append(("raw", "".join(current)))
+                current = [c]
+                in_str = True
+            else:
+                current.append(c)
+        else:
+            current.append(c)
+            if c == "\\":
+                # consume the escaped character verbatim
+                i += 1
+                if i < len(arr_text):
+                    current.append(arr_text[i])
+            elif c == '"':
+                # end of quoted string
+                segments.append(("str", "".join(current)))
+                current = []
+                in_str = False
+        i += 1
+    if current:
+        segments.append(("raw", "".join(current)))
+
+    # --- apply transforms to non-string segments only ---
+    result = []
+    for kind, text in segments:
+        if kind == "raw":
+            # Quote unquoted object keys:  {s:  ,n:  -> {"s": ,"n":
+            text = re.sub(r'([{,])\s*([A-Za-z_][A-Za-z0-9_]*)\s*:', r'\1"\2":', text)
+            # Fix leading-dot numbers:  :.5 -> :0.5  and  :-.5 -> :-0.5
+            text = re.sub(r':(-?)\.(\d)', r':\g<1>0.\2', text)
+        result.append(text)
+    return "".join(result)
 
 
 def parse_universe_html(html):
