@@ -113,15 +113,17 @@ class ReportPDF(FPDF):
                 self.cell(w, hdr_h, _safe(h), border=1, align="C", fill=True)
             self.ln()
 
-        draw_header()
+        BODY_SIZE = 6.5   # was 6 — small bump for readability
 
-        self.set_font(FONT, "", 6)
+        draw_header()
+        self.set_font(FONT, "", BODY_SIZE)
 
         for row_idx, row in enumerate(rows):
             # Auto page break with repeated header
             if self.get_y() + row_h > PAGE_H - 14:
                 self.add_page()
                 draw_header()
+                self.set_font(FONT, "", BODY_SIZE)   # reset body font after header
 
             fill_color = COLOR_ROW_ALT if row_idx % 2 == 0 else COLOR_ROW_NORMAL
             self.set_fill_color(*fill_color)
