@@ -12,3 +12,7 @@ __pycache__/
 # Editor / OS junk
 .DS_Store
 Thumbs.db
+
+# Pytest / cache dirs
+cache/
+.pytest_cache/

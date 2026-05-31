@@ -8,3 +8,4 @@ schedule
 pytz
 lxml
 python-dotenv
+pytest
