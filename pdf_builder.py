@@ -167,8 +167,10 @@ class ReportPDF(FPDF):
                 else:
                     self.set_fill_color(*fill_color)
 
-                # Color-code percentage cells (text color)
-                if col_idx in pct_cols and val != "NA" and val != "-":
+                # Color-code percentage cells (text color).
+                # Skip when the cell has a gradient background — colored text on a
+                # colored fill is low-contrast; neutral bold text reads better there.
+                if col_idx in pct_cols and col_idx not in gradient_cols and val != "NA" and val != "-":
                     val_clean = val.replace("%", "").replace("+", "").strip()
                     try:
                         num = float(val_clean)
