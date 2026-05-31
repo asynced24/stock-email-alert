@@ -284,6 +284,30 @@ def _s5_rows(data):
              r.get("time", "-"), r.get("market_cap", "-")] for r in data]
 
 
+# ── Sections 6-9: Screen Tables ───────────────────────────────
+
+SCREEN_HEADERS = ["Company", "Ticker", "Price", "5 Day %", "1 Month %", "3 Month %", "1 Year %"]
+SCREEN_WIDTHS  = [110, 24, 26, 30, 30, 30, 31]
+_diffS = USABLE - sum(SCREEN_WIDTHS)
+SCREEN_WIDTHS[0] += _diffS
+SCREEN_GRADIENT_COLS = {3, 4, 5, 6}
+
+
+def _screen_rows(data):
+    return [[r.get("company", "-"), r.get("symbol", "-"), r.get("price", "-"),
+             r.get("5d", "-"), r.get("1mo", "-"), r.get("3mo", "-"),
+             r.get("1yr", "-")] for r in data]
+
+
+def _screen_section(pdf, title, rows):
+    pdf.section_title(title)
+    if rows:
+        pdf.table(SCREEN_HEADERS, SCREEN_WIDTHS, _screen_rows(rows),
+                  gradient_cols=SCREEN_GRADIENT_COLS)
+    else:
+        pdf.no_data_notice()
+
+
 # ── Cover Page ────────────────────────────────────────────────
 
 def _cover_page(pdf, report_date):
@@ -306,11 +330,16 @@ def _cover_page(pdf, report_date):
     pdf.set_font(FONT_B, "B", 11)
     pdf.set_text_color(*COLOR_NEUTRAL)
     toc = [
-        "Section 1 - Macro Data (FRED API)",
+        "Trading Discipline - Mantra & Past Mistakes",
+        "Section 1 - Macro Data (FRED + indices)",
         "Section 2 - Base Materials & Commodities (Yahoo Finance)",
-        "Section 3 - Industries (Finviz)",
-        "Section 4 - Companies of Interest (Filtered by Price/Volume)",
-        "Section 5 - Earnings Calendar (StockAnalysis / Finviz)",
+        "Section 3 - Industries (StockAnalysis universe, member-averaged)",
+        "Section 4 - Companies of Interest (3 tables)",
+        "Section 5 - Earnings Calendar (>=$5B, next 5 days)",
+        "Section 6 - Long-Term Winners Pulling Back",
+        "Section 7 - Uptrend Pullback",
+        "Section 8 - Downtrend Bounce",
+        "Section 9 - Near 50/200-Day Moving Average",
     ]
     for entry in toc:
         pdf.cell(USABLE, 7, _safe(f"   {entry}"), align="L")
@@ -366,17 +395,25 @@ def build_pdf(
     industries_data,
     companies_data,
     earnings_data,
+    section6_data=None,
+    section7_data=None,
+    section8_data=None,
+    section9_data=None,
     output_path="stock_report.pdf",
 ):
     """
-    Assemble all 5 sections into a single PDF and save to output_path.
+    Assemble all sections into a single PDF and save to output_path.
 
     Args:
         macro_data:      list of dicts from section1_macro.fetch_macro_data()
         materials_data:  list of dicts from section2_materials.fetch_materials_data()
         industries_data: list of dicts from section3_industries.fetch_industries_data()
-        companies_data:  list of dicts from section4_companies.fetch_companies_data()
+        companies_data:  dict with keys five_day / one_month / volume
         earnings_data:   list of dicts from section5_earnings.fetch_earnings_data()
+        section6_data:   list of row dicts from screens.long_term_pullback()
+        section7_data:   list of row dicts from screens.momentum_pullback()
+        section8_data:   list of row dicts from screens.reversal_bounce()
+        section9_data:   list of row dicts from screens.near_ma()
         output_path:     file path for the output PDF
 
     Returns:
@@ -438,6 +475,26 @@ def build_pdf(
         pdf.table(S5_HEADERS, S5_WIDTHS, _s5_rows(earnings_data))
     else:
         pdf.no_data_notice()
+
+    # -- Section 6: Long-Term Winners Pulling Back
+    _screen_section(pdf,
+                    "Section 6 - Long-Term Winners Pulling Back  (>0% 5yr, >20% 1yr, <-10% 3mo, optionable)",
+                    section6_data or [])
+
+    # -- Section 7: Uptrend Pullback
+    _screen_section(pdf,
+                    "Section 7 - Uptrend Pullback  (up >50% 1yr, down >10% over 5d/1mo/3mo)",
+                    section7_data or [])
+
+    # -- Section 8: Downtrend Bounce
+    _screen_section(pdf,
+                    "Section 8 - Downtrend Bounce  (down >20% 1yr, up >10% over 5d/1mo)",
+                    section8_data or [])
+
+    # -- Section 9: Near 50/200-Day Moving Average
+    _screen_section(pdf,
+                    "Section 9 - Near 50/200-Day Moving Average  (within 5%, >=B)",
+                    section9_data or [])
 
     pdf.output(output_path)
     print(f"[PDF] Saved to: {output_path}")
