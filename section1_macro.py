@@ -42,16 +42,25 @@ def _index_rows_from_history(index_map, closes_provider):
 
 
 def _fetch_index_closes(ticker):
-    """Fetch a 6-year close history for an equity/index ticker via yfinance."""
-    try:
-        h = yf.Ticker(ticker).history(period="6y", auto_adjust=True)
-        if h.empty:
-            return None
-        if h.index.tz is not None:
-            h.index = h.index.tz_localize(None)
-        return h["Close"].dropna()
-    except Exception:
-        return None
+    """Fetch a 6-year close history for an equity/index ticker via yfinance.
+
+    Retries briefly so a transient throttle/empty response doesn't blank the
+    index rows (S&P 500, Dow, QQQ, Russell 2000, DXY).
+    """
+    import time
+    for attempt in range(3):
+        try:
+            h = yf.Ticker(ticker).history(period="6y", auto_adjust=True)
+            if not h.empty:
+                if h.index.tz is not None:
+                    h.index = h.index.tz_localize(None)
+                closes = h["Close"].dropna()
+                if not closes.empty:
+                    return closes
+        except Exception:
+            pass
+        time.sleep(1.0 * (attempt + 1))
+    return None
 
 
 def _scrape_multpl(url):

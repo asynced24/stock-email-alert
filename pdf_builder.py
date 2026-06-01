@@ -41,12 +41,12 @@ def _safe(text):
 
 
 # ── Color Palette ────────────────────────────────────────────
-COLOR_HEADER_BG   = (30,  30,  60)    # dark navy
+COLOR_HEADER_BG   = (16,  24,  39)    # dark navy (matches buddy table headers)
 COLOR_HEADER_FG   = (255, 255, 255)
 COLOR_SEC_TITLE   = (10,  80, 160)    # section banner blue
 COLOR_POS         = (0,  120,  0)     # green text
 COLOR_NEG         = (180,  0,   0)    # red text
-COLOR_NEUTRAL     = (50,  50,  50)
+COLOR_NEUTRAL     = (40,  40,  40)    # body text (matches buddy)
 COLOR_ROW_ALT     = (245, 245, 250)   # alternating row shading
 COLOR_ROW_NORMAL  = (255, 255, 255)
 COLOR_BORDER      = (180, 180, 200)
@@ -64,17 +64,15 @@ def pct_fill_color(pct, saturate=20.0):
         return (255, 255, 255)
     frac = max(-1.0, min(1.0, v / saturate))
     intensity = abs(frac)
-    if frac > 0:   # green: keep G high, drop R and B
-        r = int(255 - 175 * intensity)
-        g = int(255 - 35 * intensity)
-        b = int(255 - 175 * intensity)
-    elif frac < 0:  # red: keep R high, drop G and B
-        r = int(255 - 35 * intensity)
-        g = int(255 - 175 * intensity)
-        b = int(255 - 175 * intensity)
-    else:
-        return (255, 255, 255)
-    return (r, g, b)
+
+    def _lerp(a, b, t):
+        return int(round(a + (b - a) * t))
+
+    if frac > 0:     # green-500 (34,197,94) -> green-900 (20,83,45)
+        return (_lerp(34, 20, intensity), _lerp(197, 83, intensity), _lerp(94, 45, intensity))
+    elif frac < 0:   # red-500 (239,68,68) -> red-900 (127,29,29)
+        return (_lerp(239, 127, intensity), _lerp(68, 29, intensity), _lerp(68, 29, intensity))
+    return (255, 255, 255)
 
 
 # ── Page Geometry (A4 landscape) ─────────────────────────────
@@ -167,10 +165,14 @@ class ReportPDF(FPDF):
                 else:
                     self.set_fill_color(*fill_color)
 
-                # Color-code percentage cells (text color).
-                # Skip when the cell has a gradient background — colored text on a
-                # colored fill is low-contrast; neutral bold text reads better there.
-                if col_idx in pct_cols and col_idx not in gradient_cols and val != "NA" and val != "-":
+                # Text color.
+                if col_idx in gradient_cols and val not in ("NA", "-", ""):
+                    # White reads on the saturated green/red fills; a ~0% cell has a
+                    # near-white fill, so use dark text there instead of invisible white.
+                    _fill = pct_fill_color(val.replace("%", "").replace("+", "").strip())
+                    self.set_text_color(*(COLOR_NEUTRAL if _fill == (255, 255, 255)
+                                          else COLOR_HEADER_FG))
+                elif col_idx in pct_cols and val != "NA" and val != "-":
                     val_clean = val.replace("%", "").replace("+", "").strip()
                     try:
                         num = float(val_clean)
@@ -364,109 +366,78 @@ def _near_ma_section(pdf, title, window, rows):
 
 # ── Cover Page ────────────────────────────────────────────────
 
-def _cover_page(pdf, report_date):
+def _cover_page(pdf, report_date, mantra, mantra_defs, mistakes):
+    """
+    First page: replicates the exact above-the-TOC structure of the reference
+    report (centered title, Generated line, Recipients line, full-width blue
+    mantra banner, inline step definitions, Past-Mistakes line), then our own TOC.
+    """
     pdf.add_page()
-    pdf.set_y(60)
+    # Title (centered, blue)
+    pdf.set_y(18)
     pdf.set_font(FONT_B, "B", 26)
     pdf.set_text_color(*COLOR_SEC_TITLE)
-    pdf.cell(USABLE, 14, "Daily Stock Market Report", align="C")
-    pdf.ln(16)
-    pdf.set_font(FONT, "", 14)
+    pdf.cell(USABLE, 13, "Stock Market Report", align="C")
+    pdf.ln(15)
+    # Generated
+    pdf.set_font(FONT, "", 12)
     pdf.set_text_color(*COLOR_NEUTRAL)
-    pdf.cell(USABLE, 8, _safe(f"Generated: {report_date}"), align="C")
-    pdf.ln(10)
-    pdf.set_font(FONT, "I", 10)
-    pdf.set_text_color(120, 120, 120)
+    pdf.cell(USABLE, 6, _safe(f"Generated: {report_date}"), align="C")
+    pdf.ln(7)
+    # Recipients (all configured addresses)
     try:
         from config import EMAIL_RECIPIENT
-        recipient = EMAIL_RECIPIENT or "(not configured)"
+        recips = "  |  ".join(a.strip() for a in str(EMAIL_RECIPIENT or "").split(",") if a.strip())
     except Exception:
-        recipient = "(not configured)"
-    pdf.cell(USABLE, 6, _safe(f"Recipient: {recipient}"), align="C")
-    pdf.ln(18)
-
-    # ── Sound Options Trading Mantra (front and center, under the title) ──
-    from config import MANTRA, load_mistakes
-    pdf.set_font(FONT_B, "B", 14)
-    pdf.set_text_color(*COLOR_SEC_TITLE)
-    pdf.cell(USABLE, 8, "Sound Options Trading Mantra", align="C")
-    pdf.ln(10)
-    pdf.set_font(FONT_B, "B", 12)
-    pdf.set_text_color(*COLOR_NEUTRAL)
-    pdf.cell(USABLE, 8, _safe("  ->  ".join(MANTRA)), align="C")
-    pdf.ln(13)
-
-    # Past mistakes, listed under the mantra
-    pdf.set_font(FONT_B, "B", 12)
-    pdf.set_text_color(*COLOR_SEC_TITLE)
-    pdf.cell(USABLE, 7, "Past Mistakes", align="C")
-    pdf.ln(8)
-    pdf.set_font(FONT, "", 11)
+        recips = "(not configured)"
+    pdf.set_font(FONT, "I", 9)
     pdf.set_text_color(120, 120, 120)
-    _mistakes = load_mistakes()
-    _mline = ",   ".join(_mistakes) if _mistakes else "(none recorded)"
-    pdf.multi_cell(USABLE, 6, _safe(_mline), align="C")
-    pdf.ln(18)
+    pdf.cell(USABLE, 5, _safe(f"Recipients: {recips}"), align="C")
+    pdf.ln(9)
+    # Mantra banner (full-width blue bar, white text)
+    pdf.set_fill_color(*COLOR_SEC_TITLE)
+    pdf.set_text_color(*COLOR_HEADER_FG)
+    pdf.set_font(FONT_B, "B", 11)
+    pdf.cell(USABLE, 8, _safe("  Sound Options Trading Mantra: " + "  -  ".join(mantra)),
+             align="L", fill=True)
+    pdf.ln(11)
+    # Mantra definitions (bold blue label + gray description, inline)
+    for step, desc in mantra_defs:
+        y = pdf.get_y()
+        pdf.set_font(FONT_B, "B", 8)
+        pdf.set_text_color(10, 60, 120)
+        pdf.cell(26, 5, _safe(f"  {step.upper()}:"), align="L")
+        pdf.set_font(FONT, "", 8)
+        pdf.set_text_color(*COLOR_NEUTRAL)
+        pdf.set_xy(pdf.l_margin + 26, y)
+        pdf.multi_cell(USABLE - 26, 5, _safe(desc), align="L")
+    pdf.ln(3)
+    # Past mistakes (bold, dark red)
+    pdf.set_font(FONT_B, "B", 9)
+    pdf.set_text_color(160, 30, 30)
+    _mline = "  |  ".join(mistakes) if mistakes else "(none recorded)"
+    pdf.cell(USABLE, 6, _safe("  Past Mistakes (learn from these): " + _mline), align="L")
+    pdf.ln(10)
 
     # Table of contents
-    pdf.set_font(FONT_B, "B", 11)
+    pdf.set_font(FONT_B, "B", 10)
     pdf.set_text_color(*COLOR_NEUTRAL)
     toc = [
-        "Trading Discipline - Mantra & Past Mistakes",
-        "Section 1 - Macro Data (FRED + indices)",
-        "Section 2 - Base Materials & Commodities (Yahoo Finance)",
-        "Section 3 - Industries (StockAnalysis universe, member-averaged)",
-        "Section 4 - Companies of Interest (5-day / 1-month / volume)",
-        "Section 5 - Earnings Calendar (>=$5B, next 5 days)",
-        "Section 6 - Long-Term Winners Pulling Back",
+        "Section 1 - Macro Data: Market Indices + FRED Economic Series",
+        "Section 2 - Base Materials & Commodities  (Yahoo Finance)",
+        "Section 3 - Industries: PE Ratios & Performance  (StockAnalysis.com)",
+        "Section 4A - Companies of Interest: >10% 5-Day Movers",
+        "Section 4B - Companies of Interest: >20% 1-Month Movers",
+        "Section 4C - Companies of Interest: Volume Spikes (>=$2B)",
+        "Section 5 - Earnings Calendar: Next 5 Days, Companies >$5B",
+        "Section 6 - Long-Term Winners Pulling Back (optionable)",
         "Section 7 - Uptrend Pullback",
-        "Section 8 - Downtrend Bounce",
-        "Section 9 - Near 50-Day & 200-Day Moving Average",
+        "Section 8 - Downtrend Bounce (down >20% YTD)",
+        "Section 9A - Near 50-Day MA   |   Section 9B - Near 200-Day MA",
     ]
     for entry in toc:
-        pdf.cell(USABLE, 7, _safe(f"   {entry}"), align="L")
-        pdf.ln(7)
-
-
-# ── Strategy / Discipline Page ───────────────────────────────
-
-def _strategy_page(pdf, mantra, mantra_defs, mistakes):
-    pdf.add_page()
-    pdf.set_font(FONT_B, "B", 18)
-    pdf.set_text_color(*COLOR_SEC_TITLE)
-    pdf.cell(USABLE, 12, "Trading Discipline", align="C")
-    pdf.ln(16)
-
-    # Mantra
-    pdf.set_font(FONT_B, "B", 13)
-    pdf.set_text_color(*COLOR_NEUTRAL)
-    pdf.cell(USABLE, 8, "Mantra", align="L")
-    pdf.ln(9)
-    pdf.set_font(FONT_B, "B", 12)
-    pdf.cell(USABLE, 8, _safe("  ->  ".join(mantra)), align="L")
-    pdf.ln(12)
-
-    # Definitions (bold label, wrapped description)
-    for step, desc in mantra_defs:
-        pdf.set_font(FONT_B, "B", 10)
-        pdf.cell(28, 6, _safe(f"  {step}:"), align="L")
-        pdf.set_font(FONT, "", 10)
-        pdf.multi_cell(USABLE - 28, 6, _safe(desc), align="L")
-    pdf.ln(8)
-
-    # Past mistakes
-    pdf.set_font(FONT_B, "B", 13)
-    pdf.set_text_color(*COLOR_NEUTRAL)
-    pdf.cell(USABLE, 8, "Past Mistakes", align="L")
-    pdf.ln(9)
-    pdf.set_font(FONT, "", 11)
-    if mistakes:
-        for m in mistakes:
-            pdf.cell(USABLE, 7, _safe(f"  - {m}"), align="L")
-            pdf.ln(7)
-    else:
-        pdf.cell(USABLE, 7, "  (none recorded)", align="L")
-        pdf.ln(7)
+        pdf.cell(USABLE, 6, _safe(f"   {entry}"), align="L")
+        pdf.ln(6)
 
 
 # ── Main Build Function ───────────────────────────────────────
@@ -507,12 +478,9 @@ def build_pdf(
 
     pdf = ReportPDF(report_date)
 
-    # ── Cover ─────────────────────────────────────────────────
-    _cover_page(pdf, report_date)
-
-    # ── Strategy / Discipline Page ────────────────────────────
+    # ── Cover + Strategy combined onto the first page (reference layout) ──
     from config import MANTRA, MANTRA_DEFS, load_mistakes
-    _strategy_page(pdf, MANTRA, MANTRA_DEFS, load_mistakes())
+    _cover_page(pdf, report_date, MANTRA, MANTRA_DEFS, load_mistakes())
 
     # ── Section 1: FRED Macro ─────────────────────────────────
     pdf.section_title("Section 1 - Macro Data  (Source: FRED API)")
