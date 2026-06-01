@@ -34,10 +34,12 @@ def _base_row(universe_df, symbol, closes):
     }
 
 
-def near_ma(universe_df, panel, min_cap, window, pct=5.0):
+def near_ma(universe_df, panel, min_cap, window, pct=5.0, min_5yr=25.0):
     """
-    Stocks whose latest price is within `pct`% of their `window`-day moving
-    average (window is 50 or 200). Each row carries 'ma' = the MA value.
+    Stocks within `pct`% of their `window`-day moving average (window 50 or 200),
+    AND up more than `min_5yr`% over the last 5 years. Each row carries 'ma' (the
+    MA value) plus '6mo' and '5yr' period changes. Market-cap floor is `min_cap`.
+    Requires ~5 years of history (a 5-year return can't be computed otherwise).
     """
     out = []
     for symbol in _cap_filtered(universe_df, min_cap)["symbol"]:
@@ -46,10 +48,21 @@ def near_ma(universe_df, panel, min_cap, window, pct=5.0):
             continue
         price = float(closes.iloc[-1])
         ma = float(closes.tail(window).mean())
-        if ma > 0 and abs(price - ma) / ma * 100 <= pct:
-            row = _base_row(universe_df, symbol, closes)
-            row["ma"] = f"{ma:.2f}"
-            out.append(row)
+        if not (ma > 0 and abs(price - ma) / ma * 100 <= pct):
+            continue
+        # Need ~5 years of history to judge a 5-year trend. Clamp the lookback to
+        # what's available (a "5y" panel is ~1255 trading days, just under 1260),
+        # so a few missing sessions never blanks the whole screen.
+        if len(closes) < 1200:
+            continue
+        fyr = pct_change_over(closes, min(SESS["5yr"], len(closes) - 1))
+        if fyr == "NA" or fyr <= min_5yr:
+            continue
+        row = _base_row(universe_df, symbol, closes)
+        row["ma"]  = f"{ma:.2f}"
+        row["6mo"] = format_pct(pct_change_over(closes, SESS["6mo"]))
+        row["5yr"] = format_pct(fyr)
+        out.append(row)
     return out
 
 

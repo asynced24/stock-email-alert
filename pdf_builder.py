@@ -339,17 +339,18 @@ def _explainer(pdf, text):
 
 def _s9_headers(window):
     return ["Company", "Ticker", "Price", f"{window}-Day MA",
-            "5 Day %", "1 Month %", "3 Month %", "1 Year %"]
+            "5 Day %", "1 Month %", "3 Month %", "6 Month %", "1 Year %", "5 Year %"]
 
-S9_WIDTHS = [100, 22, 24, 28, 26, 26, 26, 29]
+S9_WIDTHS = [78, 20, 22, 26, 22, 22, 22, 22, 22, 23]
 S9_WIDTHS[0] += USABLE - sum(S9_WIDTHS)
-S9_GRADIENT = {4, 5, 6, 7}
+S9_GRADIENT = {4, 5, 6, 7, 8, 9}   # the six percentage columns
 
 
 def _s9_rows(data):
     return [[r.get("company", "-"), r.get("symbol", "-"), r.get("price", "-"),
              r.get("ma", "-"), r.get("5d", "-"), r.get("1mo", "-"),
-             r.get("3mo", "-"), r.get("1yr", "-")] for r in data]
+             r.get("3mo", "-"), r.get("6mo", "-"), r.get("1yr", "-"),
+             r.get("5yr", "-")] for r in data]
 
 
 def _near_ma_section(pdf, title, window, rows):
@@ -516,7 +517,7 @@ def build_pdf(
     # ── Section 1: FRED Macro ─────────────────────────────────
     pdf.section_title("Section 1 - Macro Data  (Source: FRED API)")
     if macro_data:
-        pdf.table(S1_HEADERS, S1_WIDTHS, _s1_rows(macro_data), pct_cols=_std_pct_cols())
+        pdf.table(S1_HEADERS, S1_WIDTHS, _s1_rows(macro_data), gradient_cols=_std_pct_cols())
     else:
         pdf.no_data_notice()
 
@@ -595,10 +596,10 @@ def build_pdf(
 
     # -- Section 9: Near Moving Average (two tables: 50-day, then 200-day)
     _near_ma_section(pdf,
-                     "Section 9 - Near 50-Day Moving Average  (within 5%, >=$5B)",
+                     "Section 9A - Near 50 day MA, >5bn market cap, >25% last 5 years",
                      50, section9_50_data or [])
     _near_ma_section(pdf,
-                     "Section 9 - Near 200-Day Moving Average  (within 5%, >=$5B)",
+                     "Section 9B - Near 200 day MA, >5bn market cap, >25% last 5 years",
                      200, section9_200_data or [])
 
     return _write_pdf(pdf, output_path)

@@ -16,25 +16,50 @@ def _panel_from(series_by_ticker):
     return pd.DataFrame(data, index=idx, columns=pd.MultiIndex.from_tuples(cols))
 
 
-def test_near_ma_flags_price_within_5pct(sample_universe):
-    # AAA: 210 closes flat at 100 -> 50d MA == 100, price 100 -> within 5%
-    panel = _panel_from({"AAA": ([100.0] * 210, [1] * 210)})
+# 5 years ago = 50, recent 600 sessions flat at 100 -> +100% over 5yr, price == MA.
+_NEAR_MA_SERIES = [50.0] * 700 + [100.0] * 601   # len 1301 (>= 1261 for a 5yr change)
+
+
+def test_near_ma_flags_price_within_5pct_and_5yr_gain(sample_universe):
+    panel = _panel_from({"AAA": (_NEAR_MA_SERIES, [1] * len(_NEAR_MA_SERIES))})
     rows = screens.near_ma(sample_universe, panel, min_cap=2e9, window=50, pct=5.0)
     assert any(r["symbol"] == "AAA" for r in rows)
-    assert rows[0]["ma"] == "100.00"   # MA value reported
+    r = next(r for r in rows if r["symbol"] == "AAA")
+    assert r["ma"] == "100.00"          # MA value reported
+    assert "6mo" in r and "5yr" in r    # new columns present
+    assert r["5yr"].startswith("+")     # up over 5 years
 
 
 def test_near_ma_200_window(sample_universe):
-    panel = _panel_from({"AAA": ([100.0] * 210, [1] * 210)})
+    panel = _panel_from({"AAA": (_NEAR_MA_SERIES, [1] * len(_NEAR_MA_SERIES))})
     rows = screens.near_ma(sample_universe, panel, min_cap=2e9, window=200, pct=5.0)
     assert any(r["symbol"] == "AAA" for r in rows)
 
 
+def test_near_ma_excludes_weak_5yr(sample_universe):
+    # Flat series -> ~0% over 5 years -> fails the >25% 5yr filter -> excluded.
+    flat = [100.0] * 1301
+    panel = _panel_from({"AAA": (flat, [1] * 1301)})
+    rows = screens.near_ma(sample_universe, panel, min_cap=2e9, window=50, pct=5.0)
+    assert all(r["symbol"] != "AAA" for r in rows)
+
+
 def test_near_ma_excludes_small_cap(sample_universe):
     # CCC market cap is 1e9 < 2e9 floor; even if near MA it must be excluded
-    panel = _panel_from({"CCC": ([10.0] * 210, [1] * 210)})
+    panel = _panel_from({"CCC": (_NEAR_MA_SERIES, [1] * len(_NEAR_MA_SERIES))})
     rows = screens.near_ma(sample_universe, panel, min_cap=2e9, window=50, pct=5.0)
     assert all(r["symbol"] != "CCC" for r in rows)
+
+
+def test_near_ma_works_on_realistic_5y_panel_length(sample_universe):
+    # Regression: a real yfinance "5y" fetch returns ~1255 trading days, just UNDER
+    # the 1260-session 5yr lookback. Before the clamp this blanked Section 9 (0 rows).
+    series = [40.0] * 655 + [100.0] * 600   # len 1255; 5y-ago ~40 -> +150%; price == 50d MA
+    assert len(series) == 1255
+    panel = _panel_from({"AAA": (series, [1] * len(series))})
+    rows = screens.near_ma(sample_universe, panel, min_cap=2e9, window=50)
+    assert any(r["symbol"] == "AAA" for r in rows)        # must still screen
+    assert next(r for r in rows if r["symbol"] == "AAA")["5yr"].startswith("+")
 
 
 def test_momentum_pullback(sample_universe):

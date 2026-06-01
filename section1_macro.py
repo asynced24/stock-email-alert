@@ -118,20 +118,30 @@ def _fetch_series(fred, series_id, start_date):
             pass
         return None
 
-    try:
-        data = fred.get_series(
-            series_id,
-            observation_start=start_date.strftime("%Y-%m-%d"),
-        )
-        result = _as_datetime_series(data)
-        if result is not None:
-            return result
-        # If the bounded fetch returned a bad index, retry without start date
-        data = fred.get_series(series_id)
-        return _as_datetime_series(data)
-    except Exception as e:
-        print(f"  [WARN] Could not fetch FRED series {series_id}: {e}")
-        return None
+    import time
+    last_err = None
+    # FRED rate-limits bursts of requests (HTTP 429). Retry with backoff so a
+    # transient throttle doesn't blank the whole row.
+    for attempt in range(4):
+        try:
+            data = fred.get_series(
+                series_id,
+                observation_start=start_date.strftime("%Y-%m-%d"),
+            )
+            result = _as_datetime_series(data)
+            if result is not None:
+                return result
+            # Bounded fetch returned a bad index — try once without a start date.
+            data = fred.get_series(series_id)
+            recovered = _as_datetime_series(data)
+            if recovered is not None:
+                return recovered
+            return None   # fetched OK but unusable; retrying won't help
+        except Exception as e:
+            last_err = e
+            time.sleep(1.5 * (attempt + 1))   # 1.5s, 3s, 4.5s backoff
+    print(f"  [WARN] Could not fetch FRED series {series_id} after retries: {last_err}")
+    return None
 
 
 def fetch_macro_data():

@@ -45,7 +45,7 @@ def volumes_for(panel, ticker):
 
 def _download_chunk(tickers):
     df = yf.download(
-        tickers, period="5y", interval="1d", group_by="ticker",
+        tickers, period="6y", interval="1d", group_by="ticker",
         auto_adjust=True, threads=True, progress=False,
     )
     if df.index.tz is not None:
