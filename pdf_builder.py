@@ -352,8 +352,10 @@ def _screen_rows(data):
              r.get("1yr", "-")] for r in data]
 
 
-def _screen_section(pdf, title, rows):
+def _screen_section(pdf, title, rows, explainer=None):
     pdf.section_title(title)
+    if explainer:
+        _explainer(pdf, explainer)
     if rows:
         pdf.table(SCREEN_HEADERS, SCREEN_WIDTHS, _screen_rows(rows),
                   gradient_cols=SCREEN_GRADIENT_COLS)
@@ -583,7 +585,17 @@ def build_pdf(
     # -- Section 6: Long-Term Winners Pulling Back
     _screen_section(pdf,
                     "Section 6 - Long-Term Winners Pulling Back  (>0% 5yr, >20% 1yr, <=-10% 1mo or 3mo, optionable)",
-                    section6_data or [])
+                    section6_data or [],
+                    explainer=(
+                        "What this finds: established winners that are temporarily dipping - the idea is to "
+                        "buy a proven uptrend on a pullback rather than chase it at the highs. "
+                        "A stock is INCLUDED only if it passes ALL of these tests: "
+                        "(1) up more than 0% over the last 5 years (a genuine long-term winner, not a broken stock); "
+                        "(2) up more than 20% over the last 1 year (still in a strong uptrend); "
+                        "(3) down 10% or more over EITHER the last 1 month OR the last 3 months (the recent pullback); "
+                        "and (4) the stock has listed options available (so the setup is tradeable with options). "
+                        "Only companies with a market cap of $2 billion or more are scanned. "
+                        "Cells are shaded green for gains and red for losses, darker as the move gets bigger."))
 
     # -- Section 7: Uptrend Pullback
     _screen_section(pdf,
