@@ -582,7 +582,7 @@ def build_pdf(
 
     # -- Section 6: Long-Term Winners Pulling Back
     _screen_section(pdf,
-                    "Section 6 - Long-Term Winners Pulling Back  (>0% 5yr, >20% 1yr, <-10% 3mo, optionable)",
+                    "Section 6 - Long-Term Winners Pulling Back  (>0% 5yr, >20% 1yr, <=-10% 1mo or 3mo, optionable)",
                     section6_data or [])
 
     # -- Section 7: Uptrend Pullback
