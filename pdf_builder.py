@@ -75,6 +75,27 @@ def pct_fill_color(pct, saturate=20.0):
     return (255, 255, 255)
 
 
+def spike_fill_color(ratio_str, lo=2.0, hi=6.0):
+    """
+    Heat color for a volume-spike ratio (e.g. "3.4x"). The spike measures HOW FAR
+    today's peak volume sits above the 2-week average, so this is one-directional
+    intensity (not up/down): amber-100 at the `lo` threshold deepening to amber-700
+    at `hi` and beyond. Distinct from the green/red price heatmap so the two don't
+    get confused. Returns white if unparseable.
+    """
+    try:
+        v = float(str(ratio_str).lower().replace("x", "").strip())
+    except (TypeError, ValueError):
+        return (255, 255, 255)
+    t = max(0.0, min(1.0, (v - lo) / (hi - lo)))
+
+    def _lerp(a, b, k):
+        return int(round(a + (b - a) * k))
+
+    # amber-100 (254,243,199) -> amber-700 (180,83,9)
+    return (_lerp(254, 180, t), _lerp(243, 83, t), _lerp(199, 9, t))
+
+
 # ── Page Geometry (A4 landscape) ─────────────────────────────
 PAGE_W  = 297
 PAGE_H  = 210
@@ -115,7 +136,8 @@ class ReportPDF(FPDF):
         self.ln(11)
 
     # ── Table ─────────────────────────────────────────────────
-    def table(self, headers, col_widths, rows, pct_cols=None, gradient_cols=None):
+    def table(self, headers, col_widths, rows, pct_cols=None, gradient_cols=None,
+              spike_cols=None):
         """
         Render a table.
         headers:       list of column header strings
@@ -123,11 +145,15 @@ class ReportPDF(FPDF):
         rows:          list of lists (each inner list is a row of cell values)
         pct_cols:      set of column indices whose values are pct strings (text color-coded)
         gradient_cols: set of column indices whose cell BACKGROUND is shaded by magnitude
+        spike_cols:    set of column indices holding volume-spike ratios ("3.4x"),
+                       shaded on an amber intensity scale
         """
         if pct_cols is None:
             pct_cols = set()
         if gradient_cols is None:
             gradient_cols = set()
+        if spike_cols is None:
+            spike_cols = set()
 
         row_h = 5.2   # mm per row
         hdr_h = 6.0   # header row height
@@ -158,10 +184,12 @@ class ReportPDF(FPDF):
             for col_idx, (val, w) in enumerate(zip(row, col_widths)):
                 val = _safe(val)
 
-                # Choose fill: gradient overrides alternating shading
+                # Choose fill: gradient / spike override alternating shading
                 if col_idx in gradient_cols and val not in ("NA", "-", ""):
                     self.set_fill_color(*pct_fill_color(
                         val.replace("%", "").replace("+", "").strip()))
+                elif col_idx in spike_cols and val not in ("NA", "-", ""):
+                    self.set_fill_color(*spike_fill_color(val))
                 else:
                     self.set_fill_color(*fill_color)
 
@@ -172,6 +200,9 @@ class ReportPDF(FPDF):
                     _fill = pct_fill_color(val.replace("%", "").replace("+", "").strip())
                     self.set_text_color(*(COLOR_NEUTRAL if _fill == (255, 255, 255)
                                           else COLOR_HEADER_FG))
+                elif col_idx in spike_cols and val not in ("NA", "-", ""):
+                    # Amber fills stay light enough for dark text at all intensities.
+                    self.set_text_color(*COLOR_NEUTRAL)
                 elif col_idx in pct_cols and val != "NA" and val != "-":
                     val_clean = val.replace("%", "").replace("+", "").strip()
                     try:
@@ -273,7 +304,8 @@ S4_VOL_HEADERS  = ["Company", "Ticker", "Price", "5 Day %", "Avg Vol (2wk)",
                    "Top Spike (3d)", "Peak Vol (3d)", "Peak Date"]
 S4_VOL_WIDTHS   = [86, 22, 24, 28, 32, 30, 30, 29]   # sums to 281 (= USABLE)
 S4_VOL_WIDTHS[0] += USABLE - sum(S4_VOL_WIDTHS)
-S4_VOL_GRADIENT = {3}   # only the 5-day % is a gradient column
+S4_VOL_GRADIENT = {3}   # 5-day % uses the green/red price heatmap
+S4_VOL_SPIKE    = {5}   # "Top Spike (3d)" uses the amber volume-intensity scale
 
 
 def _s4_movers5_rows(data):
@@ -492,7 +524,7 @@ def build_pdf(
     # ── Section 2: Base Materials ─────────────────────────────
     pdf.section_title("Section 2 - Base Materials & Commodities  (Source: Yahoo Finance)")
     if materials_data:
-        pdf.table(S2_HEADERS, S2_WIDTHS, _s2_rows(materials_data), pct_cols=_std_pct_cols())
+        pdf.table(S2_HEADERS, S2_WIDTHS, _s2_rows(materials_data), gradient_cols=_std_pct_cols())
     else:
         pdf.no_data_notice()
 
@@ -531,12 +563,13 @@ def build_pdf(
         "Volume spike = the single highest daily trading volume over the last 3 trading days "
         "is at least 2x the average daily volume of the prior 2 weeks (10 trading days). "
         "Only companies with a market cap of $2B or more are included. "
-        "'Avg Vol (2wk)' is that 2-week average; 'Top Spike (3d)' is the peak/average ratio; "
+        "'Avg Vol (2wk)' is that 2-week average; 'Top Spike (3d)' is the peak/average ratio "
+        "(amber-shaded - darker means a larger spike vs normal volume); "
         "'Peak Vol (3d)' is the highest single-day volume and 'Peak Date' is the day it occurred.")
     vol = buckets.get("volume", [])
     if vol:
         pdf.table(S4_VOL_HEADERS, S4_VOL_WIDTHS, _s4_vol_rows(vol),
-                  gradient_cols=S4_VOL_GRADIENT)
+                  gradient_cols=S4_VOL_GRADIENT, spike_cols=S4_VOL_SPIKE)
     else:
         pdf.no_data_notice()
 

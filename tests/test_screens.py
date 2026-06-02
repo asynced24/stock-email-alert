@@ -107,3 +107,18 @@ def test_long_term_pullback_requires_options(sample_universe):
     rows = screens.long_term_pullback(sample_universe, panel, min_cap=2e9,
                                       has_options=lambda s: False)
     assert all(r["symbol"] != "AAA" for r in rows)
+
+
+def test_long_term_pullback_triggers_on_1month_branch(sample_universe):
+    # 3-month change is POSITIVE (would fail the old 3mo-only rule), but the last
+    # month is down >10% -> must qualify under the new "3mo OR 1mo <= -10%" rule.
+    vals = [80.0] * 1260
+    vals[0] = 50.0             # ~5yr ago -> up strongly
+    vals[1260 - 253] = 60.0    # ~1yr ago -> +>20% over the year
+    vals[1260 - 64] = 80.0     # ~3mo ago == now-ish baseline (3mo change ~0, not <=-10)
+    vals[1260 - 22] = 100.0    # ~1mo ago high
+    vals[-1] = 85.0            # now: 1mo change = -15%
+    panel = _panel_from({"AAA": (vals, [1] * 1260)})
+    rows = screens.long_term_pullback(sample_universe, panel, min_cap=2e9,
+                                      has_options=lambda s: True)
+    assert any(r["symbol"] == "AAA" for r in rows)

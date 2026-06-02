@@ -110,7 +110,10 @@ def reversal_bounce(universe_df, panel, min_cap):
 def long_term_pullback(universe_df, panel, min_cap, has_options=None):
     """
     Long-term winner pulling back, optionable (report Section 6):
-      >0% over ~5yr AND >20% over 1yr AND < -10% over 3mo, optionable.
+      >0% over ~5yr AND >20% over 1yr AND (<= -10% over 3mo OR <= -10% over 1mo),
+      optionable.
+    The pullback now triggers on EITHER a 3-month or a 1-month drop of 10%+, so a
+    sharp recent dip qualifies even if the 3-month figure hasn't crossed yet.
     `has_options` is an optional callable sym->bool so this module stays network-free;
     main.py supplies a yfinance-backed checker. Requires >=3yr of history so the
     5-year change is meaningful.
@@ -123,11 +126,13 @@ def long_term_pullback(universe_df, panel, min_cap, has_options=None):
         lt = pct_change_over(closes, min(SESS["5yr"], len(closes) - 1))
         yr = pct_change_over(closes, SESS["1yr"])
         m3 = pct_change_over(closes, SESS["3mo"])
+        m1 = pct_change_over(closes, SESS["1mo"])
         if lt == "NA" or lt <= 0:
             continue
         if yr == "NA" or yr <= 20:
             continue
-        if m3 == "NA" or m3 >= -10:
+        pulled_back = (m3 != "NA" and m3 <= -10) or (m1 != "NA" and m1 <= -10)
+        if not pulled_back:
             continue
         if has_options is not None and not has_options(symbol):
             continue
