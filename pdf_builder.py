@@ -41,14 +41,12 @@ def _safe(text):
 
 
 # ── Color Palette ────────────────────────────────────────────
-# Color scheme copied from Matt's report (matth-dev): colored TEXT on light
-# alternating rows, navy headers, blue section banners. (Not a heatmap fill.)
-COLOR_HEADER_BG   = (30,  30,  60)    # dark navy
+COLOR_HEADER_BG   = (16,  24,  39)    # dark navy (matches buddy table headers)
 COLOR_HEADER_FG   = (255, 255, 255)
 COLOR_SEC_TITLE   = (10,  80, 160)    # section banner blue
-COLOR_POS         = (0,  120,  0)     # green text (positive %)
-COLOR_NEG         = (180,  0,   0)    # red text (negative %)
-COLOR_NEUTRAL     = (50,  50,  50)    # body text
+COLOR_POS         = (0,  120,  0)     # green text
+COLOR_NEG         = (180,  0,   0)    # red text
+COLOR_NEUTRAL     = (40,  40,  40)    # body text (matches buddy)
 COLOR_ROW_ALT     = (245, 245, 250)   # alternating row shading
 COLOR_ROW_NORMAL  = (255, 255, 255)
 COLOR_BORDER      = (180, 180, 200)
@@ -70,10 +68,12 @@ def pct_fill_color(pct, saturate=20.0):
     def _lerp(a, b, t):
         return int(round(a + (b - a) * t))
 
-    if frac > 0:     # green-500 (34,197,94) -> green-900 (20,83,45)
-        return (_lerp(34, 20, intensity), _lerp(197, 83, intensity), _lerp(94, 45, intensity))
-    elif frac < 0:   # red-500 (239,68,68) -> red-900 (127,29,29)
-        return (_lerp(239, 127, intensity), _lerp(68, 29, intensity), _lerp(68, 29, intensity))
+    # Matches Matt's report heatmap: a soft pastel at small moves deepening to a
+    # rich (not near-black) tone at large moves. Lighter/less extreme than before.
+    if frac > 0:     # pastel green (230,255,230) -> deep green (0,100,0)
+        return (_lerp(230, 0, intensity), _lerp(255, 100, intensity), _lerp(230, 0, intensity))
+    elif frac < 0:   # pastel red (255,230,230) -> deep red (139,0,0)
+        return (_lerp(255, 139, intensity), _lerp(230, 0, intensity), _lerp(230, 0, intensity))
     return (255, 255, 255)
 
 
@@ -183,19 +183,29 @@ class ReportPDF(FPDF):
 
             fill_color = COLOR_ROW_ALT if row_idx % 2 == 0 else COLOR_ROW_NORMAL
 
-            # Matt's scheme = colored TEXT on light alternating rows (no heatmap fills).
-            # Percentage columns (gradient_cols and pct_cols are treated the same here)
-            # get green/red text by sign; everything else is neutral.
-            pct_like = pct_cols | gradient_cols
-
             for col_idx, (val, w) in enumerate(zip(row, col_widths)):
                 val = _safe(val)
 
-                # Every cell uses the alternating row shading.
-                self.set_fill_color(*fill_color)
+                # Choose fill: gradient / spike override alternating shading
+                if col_idx in gradient_cols and val not in ("NA", "-", ""):
+                    self.set_fill_color(*pct_fill_color(
+                        val.replace("%", "").replace("+", "").strip()))
+                elif col_idx in spike_cols and val not in ("NA", "-", ""):
+                    self.set_fill_color(*spike_fill_color(val))
+                else:
+                    self.set_fill_color(*fill_color)
 
-                # Color the text of percentage cells by sign (green up / red down).
-                if col_idx in pct_like and val not in ("NA", "-", ""):
+                # Text color.
+                if col_idx in gradient_cols and val not in ("NA", "-", ""):
+                    # Pick text shade by fill brightness: dark text on the pale
+                    # (small-move) cells, white text on the deep (large-move) cells.
+                    _fill = pct_fill_color(val.replace("%", "").replace("+", "").strip())
+                    _lum = 0.299 * _fill[0] + 0.587 * _fill[1] + 0.114 * _fill[2]
+                    self.set_text_color(*(COLOR_HEADER_FG if _lum < 140 else COLOR_NEUTRAL))
+                elif col_idx in spike_cols and val not in ("NA", "-", ""):
+                    # Amber fills stay light enough for dark text at all intensities.
+                    self.set_text_color(*COLOR_NEUTRAL)
+                elif col_idx in pct_cols and val != "NA" and val != "-":
                     val_clean = val.replace("%", "").replace("+", "").strip()
                     try:
                         num = float(val_clean)
