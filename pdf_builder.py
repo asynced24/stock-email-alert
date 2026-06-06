@@ -41,12 +41,14 @@ def _safe(text):
 
 
 # ── Color Palette ────────────────────────────────────────────
-COLOR_HEADER_BG   = (16,  24,  39)    # dark navy (matches buddy table headers)
+# Color scheme copied from Matt's report (matth-dev): colored TEXT on light
+# alternating rows, navy headers, blue section banners. (Not a heatmap fill.)
+COLOR_HEADER_BG   = (30,  30,  60)    # dark navy
 COLOR_HEADER_FG   = (255, 255, 255)
 COLOR_SEC_TITLE   = (10,  80, 160)    # section banner blue
-COLOR_POS         = (0,  120,  0)     # green text
-COLOR_NEG         = (180,  0,   0)    # red text
-COLOR_NEUTRAL     = (40,  40,  40)    # body text (matches buddy)
+COLOR_POS         = (0,  120,  0)     # green text (positive %)
+COLOR_NEG         = (180,  0,   0)    # red text (negative %)
+COLOR_NEUTRAL     = (50,  50,  50)    # body text
 COLOR_ROW_ALT     = (245, 245, 250)   # alternating row shading
 COLOR_ROW_NORMAL  = (255, 255, 255)
 COLOR_BORDER      = (180, 180, 200)
@@ -181,29 +183,19 @@ class ReportPDF(FPDF):
 
             fill_color = COLOR_ROW_ALT if row_idx % 2 == 0 else COLOR_ROW_NORMAL
 
+            # Matt's scheme = colored TEXT on light alternating rows (no heatmap fills).
+            # Percentage columns (gradient_cols and pct_cols are treated the same here)
+            # get green/red text by sign; everything else is neutral.
+            pct_like = pct_cols | gradient_cols
+
             for col_idx, (val, w) in enumerate(zip(row, col_widths)):
                 val = _safe(val)
 
-                # Choose fill: gradient / spike override alternating shading
-                if col_idx in gradient_cols and val not in ("NA", "-", ""):
-                    self.set_fill_color(*pct_fill_color(
-                        val.replace("%", "").replace("+", "").strip()))
-                elif col_idx in spike_cols and val not in ("NA", "-", ""):
-                    self.set_fill_color(*spike_fill_color(val))
-                else:
-                    self.set_fill_color(*fill_color)
+                # Every cell uses the alternating row shading.
+                self.set_fill_color(*fill_color)
 
-                # Text color.
-                if col_idx in gradient_cols and val not in ("NA", "-", ""):
-                    # White reads on the saturated green/red fills; a ~0% cell has a
-                    # near-white fill, so use dark text there instead of invisible white.
-                    _fill = pct_fill_color(val.replace("%", "").replace("+", "").strip())
-                    self.set_text_color(*(COLOR_NEUTRAL if _fill == (255, 255, 255)
-                                          else COLOR_HEADER_FG))
-                elif col_idx in spike_cols and val not in ("NA", "-", ""):
-                    # Amber fills stay light enough for dark text at all intensities.
-                    self.set_text_color(*COLOR_NEUTRAL)
-                elif col_idx in pct_cols and val != "NA" and val != "-":
+                # Color the text of percentage cells by sign (green up / red down).
+                if col_idx in pct_like and val not in ("NA", "-", ""):
                     val_clean = val.replace("%", "").replace("+", "").strip()
                     try:
                         num = float(val_clean)
