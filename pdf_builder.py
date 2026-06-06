@@ -62,18 +62,17 @@ def pct_fill_color(pct, saturate=20.0):
         v = float(pct)
     except (TypeError, ValueError):
         return (255, 255, 255)
-    frac = max(-1.0, min(1.0, v / saturate))
-    intensity = abs(frac)
+    intensity = min(1.0, abs(v) / saturate)
 
-    def _lerp(a, b, t):
-        return int(round(a + (b - a) * t))
-
-    # Matches Matt's report heatmap: a soft pastel at small moves deepening to a
-    # rich (not near-black) tone at large moves. Lighter/less extreme than before.
-    if frac > 0:     # pastel green (230,255,230) -> deep green (0,100,0)
-        return (_lerp(230, 0, intensity), _lerp(255, 100, intensity), _lerp(230, 0, intensity))
-    elif frac < 0:   # pastel red (255,230,230) -> deep red (139,0,0)
-        return (_lerp(255, 139, intensity), _lerp(230, 0, intensity), _lerp(230, 0, intensity))
+    # Discrete SATURATED bands taken straight from Matt's report (sampled from his
+    # PDF). Banding keeps the colors vivid at every level instead of fading through
+    # a washed-out gray-pink mid-tone. 5 bands by magnitude, light -> rich.
+    GREEN = [(230, 255, 230), (144, 238, 144), (60, 179, 60), (34, 139, 34), (0, 100, 0)]
+    RED   = [(255, 220, 220), (255, 120, 120), (220, 50, 50), (180, 20, 20), (139, 0, 0)]
+    if v == 0:
+        return (255, 255, 255)
+    band = min(4, int(intensity * 5))   # 0..4
+    return GREEN[band] if v > 0 else RED[band]
     return (255, 255, 255)
 
 
